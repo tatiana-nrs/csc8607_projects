@@ -1,36 +1,45 @@
 # Fichier de configuration générique (à adapter au projet)
 dataset:
-  name: TODO                # ex: "CIFAR10", "IMDB", ...
+  name: zh-plus/tiny-imagenet               # ex: "CIFAR10", "IMDB", ...
   root: "./data"            # chemin local pour les données
   split:                    # optionnel : noms/tailles de splits
-    train: TODO
-    val: TODO
-    test: TODO
+    train: train
+    val: valid
+    test: null
   download: true            # si supporté
   num_workers: 4
   shuffle: true
 
 preprocess:
   # transformations de base (ex: resize, normalize)
-  resize:                   # ex: [32, 32] ou null
-  normalize:                # ex: {"mean": [0.5,0.5,0.5], "std":[0.5,0.5,0.5]} ou null
-  text_tokenizer:           # pour NLP : nom ou paramètres, sinon null
+  resize: [64, 64]                  # ex: [32, 32] ou null
+  normalize: 
+    mean: [0.48024, 0.44806, 0.39750]
+    std:  [0.27643, 0.26887, 0.28159]           
+  text_tokenizer: null          # pour NLP : nom ou paramètres, sinon null
 
 augment:
   # data augmentation (laisser null si non utilisée)
-  random_flip:              # true/false
-  random_crop:              # paramètres ou null
-  color_jitter:             # paramètres ou null
-  spec_augment:             # pour audio : paramètres ou null
+  random_flip: true             # true/false
+  random_crop: 
+    size: [64, 64]
+    scale: [0.8, 1.0]
+    ratio: [0.75, 1.3333]             # paramètres ou null
+  color_jitter: null            # paramètres ou null
+    # brightness: 0.2
+    # contrast: 0.2
+    # saturation: 0.2
+    # hue: 0.02
+  spec_augment: null            # pour audio : paramètres ou null
 
 model:
-  type: TODO                # ex: "resnet18", "mlp", "lstm", ...
-  num_classes: TODO
-  input_shape:              # ex: [3, 32, 32] ou null
+  type: dsconvnet                # ex: "resnet18", "mlp", "lstm", ...
+  num_classes: 200
+  input_shape: [3, 64, 64]             # ex: [3, 32, 32] ou null
   hidden_sizes:             # ex: [256, 128] ou null
   activation: relu          # ex: relu, gelu, tanh...
   dropout: 0.0              # ex: 0.0–0.5
-  batch_norm: false         # true/false
+  batch_norm: true          # true/false
   residual: false           # true/false
   attention: false          # true/false
   rnn:                      # pour RNN/LSTM/GRU : paramètres ou null
@@ -43,7 +52,7 @@ train:
   seed: 42
   device: auto              # "cpu", "cuda", ou "auto"
   batch_size: 64
-  epochs: 10
+  epochs: 15
   max_steps: null           # entier ou null
   overfit_small: false      # true pour sur-apprendre sur un petit échantillon
 
@@ -51,7 +60,7 @@ train:
     name: adam              # sgd/adam/rmsprop
     lr: 0.001
     weight_decay: 0.0
-    momentum: 0.9           # utile si SGD
+    # momentum: 0.9           # utile si SGD
 
   scheduler:
     name: none              # none/step/cosine/onecycle
@@ -66,8 +75,13 @@ metrics:
 
 hparams:                    # espace pour mini grid search
   lr: [0.0005, 0.001, 0.005]
-  batch_size: [32, 64]
-  weight_decay: [0.0, 0.0005]
+  batch_size: [64, 128]
+  weight_decay: [0.0001, 0.0005]
+  B:
+    # - [1,1,1]
+    - [2,2,2]
+  width: [0.75, 1.0]
+
 
 paths:
   runs_dir: "./runs"

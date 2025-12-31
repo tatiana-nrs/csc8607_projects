@@ -10,9 +10,9 @@
 
 ## 0) Informations générales
 
-- **Étudiant·e** : _Nom, Prénom_
-- **Projet** : _Intitulé (dataset × modèle)_
-- **Dépôt Git** : _URL publique_
+- **Étudiant·e** : _NIAURONIS, Tatiana_
+- **Projet** : _Projet 6 (Tiny ImageNet x classification multiclasses)_
+- **Dépôt Git** : _https://github.com/tatiana-nrs/csc8607_projects_
 - **Environnement** : `python == ...`, `torch == ...`, `cuda == ...`  
 - **Commandes utilisées** :
   - Entraînement : `python -m src.train --config configs/config.yaml`
@@ -25,49 +25,138 @@
 ## 1) Données
 
 ### 1.1 Description du dataset
-- **Source** (lien) :
-- **Type d’entrée** (image / texte / audio / séries) :
-- **Tâche** (multiclasses, multi-label, régression) :
-- **Dimensions d’entrée attendues** (`meta["input_shape"]`) :
-- **Nombre de classes** (`meta["num_classes"]`) :
+- **Source** (lien) : https://huggingface.co/datasets/zh-plus/tiny-imagenet
+- **Type d’entrée** (image / texte / audio / séries) : image couleur
+- **Tâche** (multiclasses, multi-label, régression) : classification multiclasses 
+- **Dimensions d’entrée attendues** (`meta["input_shape"]`) : (3, 64, 64)
+- **Nombre de classes** (`meta["num_classes"]`) : 200
 
 **D1.** Quel dataset utilisez-vous ? D’où provient-il et quel est son format (dimensions, type d’entrée) ?
+
+J’utilise le dataset Tiny ImageNet chargé depuis Hugging Face Datasets sous le nom zh-plus/tiny-imagenet. Le dataset contient 100000 images et deucx colonnes. Chaque exemple est une image couleur RGB de 64×64 pixels accompagnée d’un label (par exemple n01443537). On a 200 classes au total.
 
 ### 1.2 Splits et statistiques
 
 | Split | #Exemples | Particularités (déséquilibre, longueur moyenne, etc.) |
 |------:|----------:|--------------------------------------------------------|
-| Train |           |                                                        |
-| Val   |           |                                                        |
-| Test  |           |                                                        |
+| Train | 90000     |  200 classes, 500 images par classe                    |
+| Val   | 10000     |  même 200 classes, 50 images par classe                |
+| Test  | 10000     |  pareil, 50 images par classe prélevé  dans le train   |
 
 **D2.** Donnez la taille de chaque split et le nombre de classes.  
+
+Le split d’entraînement contient 100 000 images de base, le split de validation contient 10 000 images et on a 200 classes au total. Après découpe, j’obtiens 90 000 images pour l’entraînement, 10 000 images pour la validation (le split `valid` d’origine) et 10 000 images pour le test que j’ai prélevées dans le train initial. 
+
 **D3.** Si vous avez créé un split (ex. validation), expliquez **comment** (stratification, ratio, seed).
 
-**D4.** Donnez la **distribution des classes** (graphique ou tableau) et commentez en 2–3 lignes l’impact potentiel sur l’entraînement.  
+Le dataset fournit déjà un split de validation de 10 000 images, que j’ai conservé tel quel. Comme il n’y avait pas de split de test, j’en ai créé un en prenant un ratio de 0.1 soit 10 000 exemples dans le split `train` d’origine. Le tirage a été fait avec une seed dont la valeur par défaut était de 42 dans le fichier de configuration. Le reste du train (100 000 − 10 000 = 90 000) sert de nouveau split d’entraînement. J'ai utilisé stratify_by_column="label" afin de préserver la même distribution de labels dans train/val/test (450/50/50 par classe) et assurer une évaluation comparable.
+
+**D4.** Donnez la **distribution des classes** (graphique ou tableau) et commentez en 2–3 lignes l’impact potentiel sur l’entraînement.
+
+On obtient:
+
+```
+HF train size = 100000
+=== NB PAR CLASSE (HF train_test_split, stratify_by_column='label') ===
+ cls |  train |    val |   test
+--------------------------------
+   0 |    450 |     50 |     50
+   1 |    450 |     50 |     50
+   2 |    450 |     50 |     50
+   3 |    450 |     50 |     50
+   4 |    450 |     50 |     50
+   5 |    450 |     50 |     50
+   6 |    450 |     50 |     50
+   7 |    450 |     50 |     50
+   8 |    450 |     50 |     50
+   9 |    450 |     50 |     50
+  10 |    450 |     50 |     50
+  11 |    450 |     50 |     50
+  12 |    450 |     50 |     50
+  13 |    450 |     50 |     50
+  14 |    450 |     50 |     50
+  15 |    450 |     50 |     50
+  16 |    450 |     50 |     50
+  17 |    450 |     50 |     50
+  18 |    450 |     50 |     50
+  19 |    450 |     50 |     50
+  20 |    450 |     50 |     50
+...
+Résumé :
+train total = 90000
+val   total = 10000
+test  total = 10000
+```
+
+Au final, on obtient donc une distribution très régulière : 450 images par classe dans le train, 50 par classe dans la validation et 50 par classe dans le test. Cette répartition équilibrée évite qu’une classe domine la loss et l’accuracy : le modèle reçoit autant de signal d’apprentissage pour chaque classe, ce qui rend l’accuracy un indicateur fiable.
+
 **D5.** Mentionnez toute particularité détectée (tailles variées, longueurs variables, multi-labels, etc.).
+
+On a:
+
+```
+HF train size = 100000
+
+[train (90k)]
+total = 90000
+modes: Counter({'RGB': 88353, 'L': 1647})
+sizes: Counter({(64, 64): 90000})
+nb images taille ≠ 64x64: 0
+nb labels non int: 0
+nb multi-label: 0
+
+[valid (10k)]
+total = 10000
+modes: Counter({'RGB': 9832, 'L': 168})
+sizes: Counter({(64, 64): 10000})
+nb images taille ≠ 64x64: 0
+nb labels non int: 0
+nb multi-label: 0
+
+[test (10k)]
+total = 10000
+modes: Counter({'RGB': 9826, 'L': 174})
+sizes: Counter({(64, 64): 10000})
+nb images taille ≠ 64x64: 0
+nb labels non int: 0
+nb multi-label: 0
+```
+
+Ici, j’ai vérifié 100% des exemples des trois splits. Toutes les images ont bien la même taille 64×64, tous les labels sont des entiers et aucun exemple n’est multi-label. La seule particularité constatée est la présence d’un petit pourcentage d’images en niveaux de gris (mode = "L") : environ 1 647/90 000 dans le train, 168/10 000 dans la validation et 174/10 000 dans le test . Le reste est en RGB.
+
 
 ### 1.3 Prétraitements (preprocessing) — _appliqués à train/val/test_
 
 Listez précisément les opérations et paramètres (valeurs **fixes**) :
 
-- Vision : resize = __, center-crop = __, normalize = (mean=__, std=__)…
-- Audio : resample = __ Hz, mel-spectrogram (n_mels=__, n_fft=__, hop_length=__), AmplitudeToDB…
-- NLP : tokenizer = __, vocab = __, max_length = __, padding/truncation = __…
-- Séries : normalisation par canal, fenêtrage = __…
+- Vision : resize = None, center-crop = None , normalize = (mean= [0.48024, 0.44806, 0.39750] std= [0.27643, 0.26887, 0.28159])
 
 **D6.** Quels **prétraitements** avez-vous appliqués (opérations + **paramètres exacts**) et **pourquoi** ?  
+
+J’ai appliqué trois prétraitements: conversion en RGB pour garantir 3 canaux car on a des images en L, transformation en tenseur PyTorch afin d’obtenir des valeurs de pixels dans [0,1] et un format compatible PyTorch (C,H,W), puis normalisation canal par canal avec les statistiques calculées sur le train, mean = [0.48024, 0.44806, 0.39750] et std = [0.27643, 0.26887, 0.28159]. Cette normalisation met les canaux sur des échelles comparables, ce qui stabilise l’optimisation et accélère la convergence.
+
 **D7.** Les prétraitements diffèrent-ils entre train/val/test (ils ne devraient pas, sauf recadrage non aléatoire en val/test) ?
+
+Les mêmes pré-traitements (conversion en RGB, puis tenseur, puis normalisation) sont appliqués à train, validation et test de manière identique en utilisant des statistiques calculées sur le train uniquement pour éviter tout data leakage.
 
 ### 1.4 Augmentation de données — _train uniquement_
 
 - Liste des **augmentations** (opérations + **paramètres** et **probabilités**) :
-  - ex. Flip horizontal p=0.5, RandomResizedCrop scale=__, ratio=__ …
+  - ex. Flip horizontal p=0.5, RandomResizedCrop size=64x64, scale=(0.8, 1.0), ratio=(0.75, 1.3333)
   - Audio : time/freq masking (taille, nb masques) …
   - Séries : jitter amplitude=__, scaling=__ …
 
 **D8.** Quelles **augmentations** avez-vous appliquées (paramètres précis) et **pourquoi** ?  
+
+J’utilise RandomResizedCrop(64, scale=(0.8, 1.0), ratio=(0.75, 1.3333)) pour introduire des variations de cadrage et zoom tout en conservant une entrée 64×64 et en limitant la perte d'information car au minimum 80% de la surface est conservée. RandomHorizontalFlip(p=0.5) sert à exploiter la symétrie horizontale fréquente des images naturelles avec une probabilité de 50%. Ici, on n'a pas de texte ou d'information gauche/droite donc on peut l'utiliser. L’objectif est d’accroître la diversité des observations en entraînement et donc à améliorer la généralisation du modèle et de réduire l’overfitting.
+
 **D9.** Les augmentations **conservent-elles les labels** ? Justifiez pour chaque transformation retenue.
+
+Les augmentations conservent les labels.
+
+Avec RandomResizedCrop(size=64, scale=[0.8, 1.0], ratio=[0.75, 1.3333]), on recadre et on redimensionne l’image, mais l’identité de l’objet ne change pas donc le label reste valide. La seule limite est que si l’objet est très petit ou excentré, un recadrage agressif peut parfois couper l’objet et rendre l’exemple moins informatif. Pour limiter ce risque, on a mis le scale supérieur ou égal à 0.8 et j’utilise une fenêtre d’aspect modérée.
+
+Avec RandomHorizontalFlip(p=0.5), une symétrie horizontale ne modifie pas la classe donc le label inchangé. Cette opération est sûre pour Tiny ImageNet car il n’y a pas de classes où l’orientation gauche/droite définit la classe (pas de texte à lire, pas de panneaux directionnels...).
 
 ### 1.5 Sanity-checks
 
@@ -76,7 +165,27 @@ Listez précisément les opérations et paramètres (valeurs **fixes**) :
 > _Insérer ici 2–3 captures illustrant les données après transformation._
 
 **D10.** Montrez 2–3 exemples et commentez brièvement.  
+
+![alt text](image.png)
+
+![alt text](image-1.png)
+
+J’ai généré des paires « avant → après » pour train et val (cf. artifacts/sanity/before_after_train.png et artifacts/sanity/before_after_val.png).
+
+Sur train, on observe bien le RandomResizedCrop (recadrages et zooms différents) et le flip horizontal aléatoire car l'image est retournée. Sur val, le pipeline est déterministe (resize + center-crop + normalisation) sans augmentation donc l'image reste visuellement identique :
+
+![alt text](image-2.png)
+
 **D11.** Donnez la **forme exacte** d’un batch train (ex. `(batch, C, H, W)` ou `(batch, seq_len)`), et vérifiez la cohérence avec `meta["input_shape"]`.
+
+En exécutant python -m src.sanity-check --config configs/config.yaml --n 3, j’obtiens :
+
+```
+[train] batch shape: (64, 3, 64, 64) labels shape: (64,)
+[val]   batch shape: (64, 3, 64, 64) labels shape: (64,)
+```
+
+Ces formes sont cohérentes avec meta["input_shape"] = (3, 64, 64) et correspond bien.
 
 ---
 
@@ -85,48 +194,113 @@ Listez précisément les opérations et paramètres (valeurs **fixes**) :
 ### 2.1 Baselines
 
 **M0.**
-- **Classe majoritaire** — Métrique : `_____` → score = `_____`
-- **Prédiction aléatoire uniforme** — Métrique : `_____` → score = `_____`  
+- **Classe majoritaire** — Métrique : `Accuracy` → score = `50/10000 (0,5%)`
+- **Prédiction aléatoire uniforme** — Métrique : `Accuracy` → score = `1/200 (0,5%)` (mesurée 0,47 %)
+
 _Commentez en 2 lignes ce que ces chiffres impliquent._
+
+Ces deux baselines donnent ~0,5% d’accuracy car le dataset est équilibré : prédire toujours la classe majoritaire revient à prédire une classe qui représente 1/200 des exemples (≈0,5% d'accuracy).
+Une prédiction uniforme aléatoire parmi 200 classes a aussi une probabilité de succès de 0.005 : si on est au-dessus de 0,5% cela signifie que le modèle apprend quelque chose.
 
 ### 2.2 Architecture implémentée
 
 - **Description couche par couche** (ordre exact, tailles, activations, normalisations, poolings, résiduels, etc.) :
-  - Input → …
-  - Stage 1 (répéter N₁ fois) : …
-  - Stage 2 (répéter N₂ fois) : …
-  - Stage 3 (répéter N₃ fois) : …
-  - Tête (GAP / linéaire) → logits (dimension = nb classes)
+
+Ici notre batch_size vaut 64 mais on peut utiliser B pour la description couche par couche car peut importe la taille du batch, cela marche de la même manière. 
+
+  - Input : Image RGB : (3, 64, 64)
+  Pour un batch de 64 : (B,3,64,64)=(64, 3, 64, 64) pour notre cas
+
+  - Stage 1 (répéter B₁ fois) : 
+    Chaque bloc est : Convolution 2D 3×3 depthwise → Batch normalization → ReLU →Convolution 2D 1×1 Pointwise 1×1 → BN → ReLU
+    Bloc 1 (entrée Cin=3) :
+      Depthwise Conv2d 3×3 (padding=1, groups=Cin=3) : (B,3,64,64)→(B,3,64,64)
+      BatchNorm2d(3) → ReLU
+      Pointwise Conv2d 1×1 (groups=1) pour produire 64×w canaux :(B,3,64,64)→(B,64w,64,64)
+      BatchNorm2d(64w) → ReLU
+      Si B1=2 (bloc 2, même structure, avec Cin=Cout=64w on conserve le même nombre de canaux après le pointwise) 
+      MaxPool2d 2×2 (B,64w,64,64)→(B,64w,32,32)
+
+
+  - Stage 2 (répéter B₂ fois) :
+    Bloc 1 (entrée Cin=64w) :
+      Depthwise Conv2d 3×3 (padding=1, groups=64w) :(B,64w,32,32)→(B,64w,32,32)
+      BatchNorm2d(64w) → ReLU
+      Pointwise Conv2d 1×1 pour produire 128w canaux : (B,64w,32,32)→(B,128w,32,32)
+      BatchNorm2d(128w) → ReLU
+      Si B2=2 (bloc 2, même structure, avec Cin=Cout=128w on conserve le même nombre de canaux après le pointwise) 
+      MaxPool2d 2×2 (B,128w,32,32)→(B,128w,16,16)
+
+  - Stage 3 (répéter B₃ fois) :
+    Bloc 1 (entrée Cin=128w) :
+      Depthwise Conv2d 3×3 (padding=1, groups=128w) :(B,128w,16,16)→(B,128w,16,16)
+      BatchNorm2d(128w) → ReLU
+      Pointwise Conv2d 1×1 pour produire 256w canaux : (B,128w,16,16)→(B,256w,16,16)
+      BatchNorm2d(256w) → ReLU
+      Si B3=2 (bloc 2, même structure, avec Cin=Cout=256w on conserve le même nombre de canaux après le pointwise) 
+      Global Average Pooling (GAP): (B,256w,16,16)→(B,256w)
+
+  - Tête (GAP / linéaire) → logits (dimension = nb classes):
+      Linear : (B,256w)→(B,200) (logits, num_classes=200)
+
+Pour rappel,la multiplicateur des canaux après la convolution 1×1 w ∈ {0.75, 1.0}, donc 64w∈{48,64}, 128w∈{96,128}, 256w∈{192,256} et (B1, B2, B3) parmi {(1,1,1), (2,2,2)}
 
 - **Loss function** :
   - Multi-classe : CrossEntropyLoss
-  - Multi-label : BCEWithLogitsLoss
-  - (autre, si votre tâche l’impose)
 
-- **Sortie du modèle** : forme = __(batch_size, num_classes)__ (ou __(batch_size, num_attributes)__)
 
-- **Nombre total de paramètres** : `_____`
+- **Sortie du modèle** : forme = (64, 200) (batch_size, num_classes) (ou __(batch_size, num_attributes)__)
+
+- **Nombre total de paramètres** : `64 073 (w=0.75) ou  95 593 (w=1)` si (B1​,B2​,B3​)=(1,1,1) et `116 825 (w=0.75) ou  116 825 (w=1)` si (B1​,B2​,B3​)=(2,2,2)
+
+Il dépend des 2 hyperparamètres du sujet :(B1,B2,B3) ∈ {(1,1,1), (2,2,2)} et le facteur de largeur w ∈ {0.75, 1.0} (donc canaux = (64w, 128w, 256w))
 
 **M1.** Décrivez l’**architecture** complète et donnez le **nombre total de paramètres**.  
 Expliquez le rôle des **2 hyperparamètres spécifiques au modèle** (ceux imposés par votre sujet).
 
+Le modèle implémenté est un réseau en 3 stages basé sur des convolutions séparables en profondeur (depthwise + pointwise). L’entrée du réseau est une image (3, 64, 64) ; pour un batch de taille B, la forme est (B, 3, 64, 64). Ici, B=64 pour nous
+
+Chaque stage est composé de blocs identiques de la forme : Depthwise Conv 3×3 (padding=1, groups = Cin​, conserve Cin) → BatchNorm → ReLU → Pointwise Conv 1×1 (groups=1, mélange les canaux et produit Cout​) → BatchNorm → ReLU.
+Le Stage 1 répète ce bloc B1fois : le premier bloc transforme 3→64w puis (si B1=2) un second bloc garde 64w→64w. À la fin du stage, on applique un MaxPool 2×2, ce qui réduit la résolution de 64×64 à 32×32.
+Le Stage 2 répète le bloc B2​ fois : le premier bloc transforme 64w→128w, puis (si B2=2) un second bloc garde 128w→128w. Un MaxPool 2×2 ramène ensuite la résolution de 32×32 à 16×16.
+Le Stage 3 répète le bloc B3​ fois : le premier bloc transforme 128w→256w, puis (si B3=2) un second bloc garde 256w→256w. On termine par un Global Average Pooling qui transforme (B,256w,16,16) en (B,256w). rappel: B=64 ici mais ça fonctionne pareil.
+
+La tête de classification est une couche linéaire (256w→200) qui produit des logits de forme (B, 200). La fonction de perte utilisée est CrossEntropyLoss, adaptée à la classification multi-classes.
+Le nombre total de paramètres dépend directement des deux hyperparamètres imposés par le sujet :
+
+
+Le nombre de blocs par stage (B1,B2,B3)∈{(1,1,1),(2,2,2)} qui contrôle la profondeur du réseau (plus de blocs donc plus de capacité, mais aussi plus de coût et un risque accru d’overfitting).
+
+Le facteur de largeur w∈{0.75,1.0} qui multiplie uniformément les canaux (64,128,256) en (64w,128w,256w) ou si on augmente w cela augmente la capacité du modèle (surtout via les convolutions pointwise 1×1) mais également le nombre de paramètres et le coût de calcul.
+
+
+En comptant des convolutions sans biais et on obtient les totaux suivants :
+
+
+- B=(1,1,1), w=0.75 → 64 073 paramètres
+- B=(1,1,1), w=1.0→ 95 593 paramètres
+- B=(2,2,2), w=0.75 → 116 825 paramètres
+- B=(2,2,2), w=1.0 → 187 433 paramètres
+
 
 ### 2.3 Perte initiale & premier batch
 
-- **Loss initiale attendue** (multi-classe) ≈ `-log(1/num_classes)` ; exemple 100 classes → ~4.61
+- **Loss initiale attendue** (multi-classe) ≈ `-log(1/200)=log(200)` ~ 5.298
 - **Observée sur un batch** : `_____`
 - **Vérification** : backward OK, gradients ≠ 0
 
 **M2.** Donnez la **loss initiale** observée et dites si elle est cohérente. Indiquez la forme du batch et la forme de sortie du modèle.
 
+On a une loss initiale de 5.312 ce qui est proche de la loss initiale attendue de 5.298. Le modèle est donc cohérent. La forme du batch est (64, 3, 64, 64) et la forme de sortie du modèle est (64, 200).
+
 ---
 
 ## 3) Overfit « petit échantillon »
 
-- **Sous-ensemble train** : `N = ____` exemples
-- **Hyperparamètres modèle utilisés** (les 2 à régler) : `_____`, `_____`
-- **Optimisation** : LR = `_____`, weight decay = `_____` (0 ou très faible recommandé)
-- **Nombre d’époques** : `_____`
+- **Sous-ensemble train** : `N = 256` exemples
+- **Hyperparamètres modèle utilisés** (les 2 à régler) : `(B1,B2,B3) = (2,2,2)`, `w = 1.0`
+- **Optimisation** : LR = `0.001`, weight decay = `0` (0 ou très faible recommandé)
+- **Nombre d’époques** : `150`
 
 > _Insérer capture TensorBoard : `train/loss` montrant la descente vers ~0._
 
