@@ -299,12 +299,21 @@ On a une loss initiale de 5.312 ce qui est proche de la loss initiale attendue d
 
 - **Sous-ensemble train** : `N = 256` exemples
 - **Hyperparamètres modèle utilisés** (les 2 à régler) : `(B1,B2,B3) = (2,2,2)`, `w = 1.0`
-- **Optimisation** : LR = `0.001`, weight decay = `0` (0 ou très faible recommandé)
-- **Nombre d’époques** : `150`
+- **Optimisation** : LR = `0.01`, weight decay = `0` (0 ou très faible recommandé)
+- **Nombre d’époques** : `50`
 
 > _Insérer capture TensorBoard : `train/loss` montrant la descente vers ~0._
 
+![alt text](image-3.png)
+
+
 **M3.** Donnez la **taille du sous-ensemble**, les **hyperparamètres** du modèle utilisés, et la **courbe train/loss** (capture). Expliquez ce qui prouve l’overfit.
+
+Le modèle a été entraîné en mode overfit sur un sous-ensemble de 64 images extrait du jeu d’entraînement.
+Les hyperparamètres du modèle utilisés sont (B1,B2,B3)=(2,2,2) et une largeur w=1.0. 
+
+La courbe train/loss (voir capture TensorBoard) montre une décroissance rapide de la loss jusqu’à une valeur proche de 0, tandis que l’accuracy du train atteint 100 %.
+On a aussi la loss de validation qui augmente fortement et l’accuracy de validation qui reste très faible. Cela prouve l’overfitting car le modèle mémorise parfaitement le petit sous-ensemble d’entraînement sans être capable de généraliser aux données de validation.
 
 ---
 
