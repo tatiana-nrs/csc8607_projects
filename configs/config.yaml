@@ -52,7 +52,7 @@ train:
   seed: 42
   device: auto              # "cpu", "cuda", ou "auto"
   batch_size: 64
-  epochs: 15
+  epochs: 5
   max_steps: null           # entier ou null
   overfit_small: false      # true pour sur-apprendre sur un petit échantillon
 
@@ -74,12 +74,13 @@ metrics:
   regression: []            # ex: ["mae", "rmse"]
 
 hparams:                    # espace pour mini grid search
-  lr: [1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2]
+  lr: [5e-4, 1e-3, 2e-3]
   batch_size: [64, 128]
-  weight_decay: [0.0, 1e-5, 1e-4]
-  B: [2,2,2]
-    # - [1,1,1]
-  width: 1.0
+  weight_decay: [1e-5, 1e-4]
+  B:
+    - [2, 2, 2]
+    - [3, 3, 3]
+  width: [0.75, 1.0]
 
 
 paths:
