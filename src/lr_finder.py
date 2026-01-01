@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Recherche de taux d'apprentissage (LR finder).
 
@@ -8,19 +10,7 @@ Logs TensorBoard :
   - lr_finder/lr   (x-axis = step)
   - lr_finder/loss (x-axis = step)
 """
-# src/lr_finder.py
-"""
-LR finder / LR×WD finder
 
-Exécution :
-  1) Sweep LR (WD fixé)
-     python -m src.lr_finder --config configs/config.yaml --min_lr 1e-6 --max_lr 1e-1 --num_iters 200 --weight_decay 1e-5
-
-  2) Grid LR×WD (prend les listes dans cfg["hparams"]["lr"] et cfg["hparams"]["weight_decay"])
-     python -m src.lr_finder --config configs/config.yaml --lr_wd_finder --subset_size 256 --iters_per_trial 10
-"""
-
-from __future__ import annotations
 
 import argparse
 import copy
