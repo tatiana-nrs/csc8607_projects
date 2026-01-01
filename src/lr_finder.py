@@ -162,10 +162,10 @@ def main():
 
     # paramètres LR finder (peuvent être dans YAML, sinon defaults "cours")
     train_cfg = cfg.get("train", {}) or {}
-    subset_size = int(train_cfg.get("lr_finder_subset", 256))
+    subset_size = int(train_cfg.get("lr_finder_subset", 2048))
     num_iters = int(train_cfg.get("lr_finder_iters", 100))  # demandé ~100
     min_lr = float(train_cfg.get("finder_start_lr", 1e-6))
-    max_lr = float(train_cfg.get("finder_end_lr", 1e-1))
+    max_lr = float(train_cfg.get("finder_end_lr", 1.0))
 
     # weight decay list : on privilégie 1e-5 / 1e-4 comme attendu
     wd_list = train_cfg.get("lr_finder_weight_decays", None)
