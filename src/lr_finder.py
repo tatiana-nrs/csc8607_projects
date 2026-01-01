@@ -1,25 +1,26 @@
-# src/lr_finder.py
+from __future__ import annotations
+
 """
-LR finder (LR + weight decay) compatible avec ton dépôt.
+LR finder (sweep LR log-scale) compatible avec ton dépôt.
 
 Exécution (comme veut le prof) :
     python -m src.lr_finder --config configs/config.yaml
 
-Principe :
-- lit la config YAML
-- prend les listes dans config["hparams"]["lr"] et config["hparams"]["weight_decay"]
-- entraîne très brièvement sur un sous-ensemble fixe (pour réduire l’oscillation)
-- log dans TensorBoard : lr_finder/loss, lr_finder/lr, lr_finder/wd
-- affiche BEST + fenêtre "stable" (loss <= min_loss * 1.05) pour le meilleur wd
+Principe (méthode "LR range test") :
+- on prend un sous-ensemble fixe
+- on fait varier le LR de min_lr -> max_lr (log scale) sur ~num_iters
+- on log à chaque itération : (lr, loss) => TensorBoard tags:
+    lr_finder/lr
+    lr_finder/loss
+- on répète pour plusieurs weight_decay (runs séparés pour comparer facilement)
 """
-
-from __future__ import annotations
 
 import argparse
 import copy
+import math
 import time
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Any, Dict, List
 
 import yaml
 import torch
@@ -29,11 +30,10 @@ from torch.utils.tensorboard import SummaryWriter
 
 from src.data_loading import get_dataloaders
 from src.model import build_model
-from src.train import set_seed, get_device, build_optimizer  # réutilise tes utilitaires
+from src.train import set_seed, get_device, build_optimizer
 
 
-def _fixed_subset_loader(train_loader: DataLoader, subset_size: int, seed: int, device: str) -> DataLoader:
-    """Sous-ensemble déterministe pour limiter les variations (oscillations)."""
+def _make_fixed_subset_loader(train_loader: DataLoader, subset_size: int, seed: int, device: str) -> DataLoader:
     ds = train_loader.dataset
     n_total = len(ds)
     n_take = min(int(subset_size), n_total)
@@ -43,70 +43,104 @@ def _fixed_subset_loader(train_loader: DataLoader, subset_size: int, seed: int, 
     idxs = torch.randperm(n_total, generator=g).tolist()[:n_take]
     subset = Subset(ds, idxs)
 
+    # IMPORTANT pour réduire l’oscillation:
+    # - shuffle=False => séquence stable (reproductible)
+    # - drop_last=True => batch shape stable
+    batch_size = int(train_loader.batch_size) if getattr(train_loader, "batch_size", None) else 32
     return DataLoader(
         subset,
-        batch_size=int(train_loader.batch_size),
-        shuffle=True,
+        batch_size=batch_size,
+        shuffle=False,
         num_workers=int(getattr(train_loader, "num_workers", 0) or 0),
         pin_memory=(device == "cuda"),
-        drop_last=False,
+        drop_last=True,
     )
 
 
-@torch.no_grad()
-def _avg_loss(model: nn.Module, loader: DataLoader, device: str, max_batches: int) -> float:
-    model.eval()
-    loss_fn = nn.CrossEntropyLoss()
-    total, n = 0.0, 0
-    for i, (xb, yb) in enumerate(loader):
-        if i >= max_batches:
-            break
-        xb, yb = xb.to(device), yb.to(device)
-        logits = model(xb)
-        loss = loss_fn(logits, yb)
-        b = yb.size(0)
-        total += float(loss.item()) * b
-        n += b
-    return total / max(1, n)
+def _lr_at(step: int, num_iters: int, min_lr: float, max_lr: float) -> float:
+    # log-scale interpolation
+    t = step / max(1, (num_iters - 1))
+    return min_lr * (max_lr / min_lr) ** t
 
 
-def _train_few_iters(
-    model: nn.Module,
-    loader: DataLoader,
-    optimizer: torch.optim.Optimizer,
+def _set_lr(optimizer: torch.optim.Optimizer, lr: float) -> None:
+    for pg in optimizer.param_groups:
+        pg["lr"] = lr
+
+
+def lr_sweep_one_wd(
+    cfg: Dict[str, Any],
+    train_loader: DataLoader,
     device: str,
-    iters: int,
+    *,
+    weight_decay: float,
+    min_lr: float,
+    max_lr: float,
+    num_iters: int,
+    log_dir: Path,
+    seed: int,
 ) -> None:
-    model.train()
+    writer = SummaryWriter(log_dir=str(log_dir))
+    writer.add_text("config_path", str(cfg.get("__config_path__", "")))
+    writer.add_text("lr_finder/weight_decay", str(weight_decay))
+    writer.add_scalar("lr_finder/wd", float(weight_decay), 0)
+
+    model = build_model(cfg).to(device)
+    base_state = copy.deepcopy(model.state_dict())
+
+    # build optimizer (on force wd ici, et on override lr à chaque step)
+    opt_cfg = copy.deepcopy(cfg.get("train", {}).get("optimizer", {}) or {})
+    opt_cfg["weight_decay"] = float(weight_decay)
+    opt_cfg["lr"] = float(min_lr)
+    optimizer = build_optimizer(model.parameters(), opt_cfg)
+
     loss_fn = nn.CrossEntropyLoss()
-    it = iter(loader)
-    for _ in range(iters):
+    model.load_state_dict(base_state)
+    model.train()
+
+    best = float("inf")
+    ema = None
+    beta = 0.98  # smoothing pour la courbe
+
+    it = iter(train_loader)
+
+    for step in range(num_iters):
         try:
             xb, yb = next(it)
         except StopIteration:
-            it = iter(loader)
+            it = iter(train_loader)
             xb, yb = next(it)
 
+        lr = _lr_at(step, num_iters, min_lr, max_lr)
+        _set_lr(optimizer, lr)
+
         xb, yb = xb.to(device), yb.to(device)
+
         optimizer.zero_grad(set_to_none=True)
         logits = model(xb)
         loss = loss_fn(logits, yb)
         loss.backward()
         optimizer.step()
 
+        l = float(loss.item())
+        if ema is None:
+            ema = l
+        else:
+            ema = beta * ema + (1 - beta) * l
 
-def _stable_window_for_wd(results: List[Tuple[float, float, float]], best_wd: float) -> Tuple[float, float]:
-    """Fenêtre stable = LR dont la loss est <= min_loss_wd * 1.05 (pour ce wd)."""
-    wd_rows = [(lr, loss) for (lr, wd, loss) in results if wd == best_wd]
-    wd_rows.sort(key=lambda x: x[0])
-    min_loss = min(loss for _, loss in wd_rows)
-    thr = min_loss * 1.05
-    stable_lrs = [lr for lr, loss in wd_rows if loss <= thr]
-    if not stable_lrs:
-        # fallback
-        best_lr = min(wd_rows, key=lambda x: x[1])[0]
-        return best_lr, best_lr
-    return min(stable_lrs), max(stable_lrs)
+        # bias correction (comme souvent dans LR finder)
+        ema_corr = ema / (1 - beta ** (step + 1))
+
+        best = min(best, ema_corr)
+
+        writer.add_scalar("lr_finder/lr", lr, step)
+        writer.add_scalar("lr_finder/loss", ema_corr, step)
+
+        # arrêt anticipé si explosion (sinon ça “écrase” le graphe)
+        if step > 10 and ema_corr > 4.0 * best:
+            break
+
+    writer.close()
 
 
 def main():
@@ -115,6 +149,7 @@ def main():
     args = parser.parse_args()
 
     cfg: Dict[str, Any] = yaml.safe_load(open(args.config, "r"))
+    cfg["__config_path__"] = args.config  # juste pour log
 
     seed = int(cfg.get("train", {}).get("seed", 42))
     set_seed(seed)
@@ -122,79 +157,51 @@ def main():
     device = get_device(cfg.get("train", {}))
     print(f"[INFO] device={device} seed={seed}")
 
-    # Data loaders (comme train.py)
-    train_loader, val_loader, test_loader, meta = get_dataloaders(cfg)
+    # loaders
+    train_loader, _, _, _ = get_dataloaders(cfg)
 
-    # Paramètres LR finder (pas besoin d’ajouter dans YAML)
-    subset_size = int(cfg.get("train", {}).get("lr_finder_subset", 256))
-    iters_per_trial = int(cfg.get("train", {}).get("lr_finder_iters", 100))
-    eval_batches = int(cfg.get("train", {}).get("lr_finder_eval_batches", 5))
+    # paramètres LR finder (peuvent être dans YAML, sinon defaults "cours")
+    train_cfg = cfg.get("train", {}) or {}
+    subset_size = int(train_cfg.get("lr_finder_subset", 256))
+    num_iters = int(train_cfg.get("lr_finder_iters", 100))  # demandé ~100
+    min_lr = float(train_cfg.get("finder_start_lr", 1e-6))
+    max_lr = float(train_cfg.get("finder_end_lr", 1e-1))
 
-    print(f"[INFO] subset_size={subset_size} iters_per_trial={iters_per_trial} eval_batches={eval_batches}")
-
-    # Grilles depuis hparams
-    h = cfg.get("hparams", {}) or {}
-    lr_list = h.get("lr", [1e-4, 3e-4, 1e-3, 3e-3, 1e-2])
-    wd_list = h.get("weight_decay", [0.0, 1e-5, 1e-4])
-
-    # Normalise en float
-    lr_list = [float(x) for x in lr_list]
+    # weight decay list : on privilégie 1e-5 / 1e-4 comme attendu
+    wd_list = train_cfg.get("lr_finder_weight_decays", None)
+    if wd_list is None:
+        # fallback : si config.hparams.weight_decay existe, on l'utilise,
+        # sinon on prend {1e-5, 1e-4}
+        wd_list = (cfg.get("hparams", {}) or {}).get("weight_decay", [1e-5, 1e-4])
     wd_list = [float(x) for x in wd_list]
 
-    # Sous-ensemble fixe pour stabilité
-    finder_loader = _fixed_subset_loader(train_loader, subset_size=subset_size, seed=seed, device=device)
+    # subset fixe (réduit l'oscillation)
+    finder_loader = _make_fixed_subset_loader(train_loader, subset_size=subset_size, seed=seed, device=device)
 
-    # Logs
     runs_dir = Path(cfg["paths"]["runs_dir"])
     runs_dir.mkdir(parents=True, exist_ok=True)
-    run_name = time.strftime("lr_wd_finder_%Y%m%d_%H%M%S")
-    log_dir = runs_dir / run_name
-    writer = SummaryWriter(log_dir=str(log_dir))
-    print(f"[INFO] testing {len(lr_list) * len(wd_list)} combos (lr x wd)")
-    print(f"[INFO] logs -> {log_dir}")
 
-    # Base model state (réinit à chaque combo)
-    base_model = build_model(cfg).to(device)
-    base_state = copy.deepcopy(base_model.state_dict())
+    print(f"[INFO] subset_size={subset_size} num_iters={num_iters} min_lr={min_lr:g} max_lr={max_lr:g}")
+    print(f"[INFO] weight_decays={wd_list}")
 
-    results: List[Tuple[float, float, float]] = []
-    trial = 0
-
+    # un run séparé par wd => TB compare facilement
     for wd in wd_list:
-        for lr in lr_list:
-            # reset weights
-            base_model.load_state_dict(base_state)
+        run_name = f"lr_finder_wd{wd:g}_" + time.strftime("%Y%m%d_%H%M%S")
+        log_dir = runs_dir / run_name
+        print(f"[RUN] wd={wd:g} logs -> {log_dir}")
+        lr_sweep_one_wd(
+            cfg,
+            finder_loader,
+            device,
+            weight_decay=wd,
+            min_lr=min_lr,
+            max_lr=max_lr,
+            num_iters=num_iters,
+            log_dir=log_dir,
+            seed=seed,
+        )
 
-            # build optimizer en forçant lr/wd (sans toucher au YAML)
-            opt_cfg = copy.deepcopy(cfg.get("train", {}).get("optimizer", {}) or {})
-            opt_cfg["lr"] = lr
-            opt_cfg["weight_decay"] = wd
-            optimizer = build_optimizer(base_model.parameters(), opt_cfg)
-
-            # tiny train
-            _train_few_iters(base_model, finder_loader, optimizer, device=device, iters=iters_per_trial)
-
-            # eval (moyenne sur quelques batches)
-            avg_loss = _avg_loss(base_model, finder_loader, device=device, max_batches=eval_batches)
-
-            print(f"[trial {trial:03d}] lr={lr:.3e} wd={wd:.3e} avg_loss={avg_loss:.4f}")
-            writer.add_scalar("lr_finder/loss", avg_loss, trial)
-            writer.add_scalar("lr_finder/lr", lr, trial)
-            writer.add_scalar("lr_finder/wd", wd, trial)
-
-            results.append((lr, wd, avg_loss))
-            trial += 1
-
-    writer.close()
-
-    # BEST
-    best_lr, best_wd, best_loss = min(results, key=lambda t: t[2])
-    wmin, wmax = _stable_window_for_wd(results, best_wd)
-
-    print(f"[DONE] logs -> {log_dir}")
-    print(f"[BEST] lr={best_lr:.3e} wd={best_wd:.3e} avg_loss={best_loss:.4f}")
-    print(f"[STABLE_WINDOW for best wd] [{wmin:.3e}, {wmax:.3e}]")
-    print("[TIP] TensorBoard: tags lr_finder/lr, lr_finder/wd, lr_finder/loss")
+    print("[DONE] TensorBoard: regarde les tags lr_finder/lr et lr_finder/loss (plusieurs runs, un par wd)")
 
 
 if __name__ == "__main__":
