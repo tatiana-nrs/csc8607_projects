@@ -76,7 +76,7 @@ metrics:
 hparams:                    # espace pour mini grid search
   lr: [1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2]
   batch_size: [64, 128]
-  weight_decay: [1e-5, 1e-4]
+  weight_decay: [0.0, 1e-5, 1e-4]
   B: [2,2,2]
     # - [1,1,1]
   width: 1.0
