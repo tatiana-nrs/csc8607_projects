@@ -132,10 +132,10 @@ def main():
 
     print(f"[INFO] subset_size={subset_size} iters_per_trial={iters_per_trial} eval_batches={eval_batches}")
 
-    # Grilles depuis hparams (comme ton camarade)
+    # Grilles depuis hparams
     h = cfg.get("hparams", {}) or {}
     lr_list = h.get("lr", [1e-4, 3e-4, 1e-3, 3e-3, 1e-2])
-    wd_list = h.get("weight_decay", [0.0, 1e-5, 1e-4, 1e-3])
+    wd_list = h.get("weight_decay", [0.0, 1e-5, 1e-4])
 
     # Normalise en float
     lr_list = [float(x) for x in lr_list]
