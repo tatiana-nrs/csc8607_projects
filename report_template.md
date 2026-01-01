@@ -320,10 +320,10 @@ On a aussi la loss de validation qui augmente fortement et l’accuracy de valid
 ## 4) LR finder
 
 - **Méthode** : balayage LR (log-scale), quelques itérations, log `(lr, loss)`
-- **Fenêtre stable retenue** : `_____ → _____`
+- **Fenêtre stable retenue** : `[5e-3, 1e-2]`
 - **Choix pour la suite** :
-  - **LR** = `_____`
-  - **Weight decay** = `_____` (valeurs classiques : 1e-5, 1e-4)
+  - **LR** = `1e-2`
+  - **Weight decay** = `1e-3` (valeurs classiques : 1e-5, 1e-4)
 
 > _Insérer capture TensorBoard : courbe LR → loss._
 
