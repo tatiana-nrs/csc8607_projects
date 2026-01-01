@@ -78,8 +78,8 @@ hparams:                    # espace pour mini grid search
   batch_size: [64, 128]
   weight_decay: [1e-5, 1e-4]
   B:
+    - [1 ,1, 1]
     - [2, 2, 2]
-    - [3, 3, 3]
   width: [0.75, 1.0]
 
 
