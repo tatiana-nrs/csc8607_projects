@@ -127,7 +127,7 @@ def main():
 
     # Paramètres LR finder (pas besoin d’ajouter dans YAML)
     subset_size = int(cfg.get("train", {}).get("lr_finder_subset", 256))
-    iters_per_trial = int(cfg.get("train", {}).get("lr_finder_iters", 10))
+    iters_per_trial = int(cfg.get("train", {}).get("lr_finder_iters", 100))
     eval_batches = int(cfg.get("train", {}).get("lr_finder_eval_batches", 5))
 
     print(f"[INFO] subset_size={subset_size} iters_per_trial={iters_per_trial} eval_batches={eval_batches}")
