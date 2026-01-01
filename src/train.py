@@ -220,6 +220,9 @@ def main():
         train_loader = make_overfit_loader(train_loader, cfg)
         print(f"[INFO] overfit_small enabled -> train subset size = {len(train_loader.dataset)}")
 
+    print("MODEL CFG:", cfg.get("model", {}))
+    print("HPARAMS:", cfg.get("hparams", {}))
+    
     # 5) Model
     model = build_model(cfg).to(device)
 
