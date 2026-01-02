@@ -1,6 +1,6 @@
 # src/train.py
 """
-Entraînement principal (à implémenter par l'étudiant·e).
+Entraînement principal.
 
 Exécution :
     python -m src.train --config configs/config.yaml [--seed 42]
@@ -8,14 +8,18 @@ Exécution :
 Exigences :
 - lire la config YAML
 - respecter paths.runs_dir et paths.artifacts_dir
-- logger train/loss et val/loss (+ au moins une métrique classification)
-- supporter --overfit_small (sur-apprendre sur un très petit échantillon)
+- logger train/loss et val/loss (tags EXACTS)
+- logger une métrique de classification : val/f1 (obligatoire) (+ val/accuracy utile)
+- supporter --overfit_small
+- sauvegarder le meilleur checkpoint (selon val/f1) dans artifacts/best.ckpt
 """
 
+from __future__ import annotations
+
 import argparse
-import math
 import time
 from pathlib import Path
+from typing import Dict, Any, Tuple
 
 import yaml
 import torch
@@ -49,7 +53,6 @@ def get_device(cfg_train: dict) -> str:
         if dev == "mps" and not torch.backends.mps.is_available():
             return "cpu"
         return dev
-    # auto
     if torch.cuda.is_available():
         return "cuda"
     if torch.backends.mps.is_available():
@@ -70,50 +73,15 @@ def build_optimizer(params, cfg_opt: dict):
     return optim.Adam(params, lr=lr, weight_decay=wd)
 
 
-def grad_norm_sum(model: nn.Module) -> float:
-    total = 0.0
-    for p in model.parameters():
-        if p.grad is None:
-            continue
-        g = p.grad.detach()
-        total += float(torch.norm(g, p=2).item())
-    return total
-
-
-@torch.no_grad()
-def eval_epoch(model: nn.Module, loader: DataLoader, device: str):
-    model.eval()
-    loss_fn = nn.CrossEntropyLoss()
-    total_loss, total_correct, n = 0.0, 0.0, 0
-
-    for xb, yb in loader:
-        xb, yb = xb.to(device), yb.to(device)
-        logits = model(xb)
-        loss = loss_fn(logits, yb)
-        preds = logits.argmax(dim=1)
-
-        b = yb.size(0)
-        total_loss += loss.item() * b
-        total_correct += (preds == yb).float().sum().item()
-        n += b
-
-    return total_loss / max(1, n), total_correct / max(1, n)
-
-
 def make_overfit_loader(train_loader: DataLoader, cfg: dict) -> DataLoader:
-    """
-    Tronque le dataset train pour sur-apprendre rapidement.
-    Par défaut: 64 exemples (ou cfg["train"]["overfit_n"] si présent).
-    """
     seed = int(cfg["train"].get("seed", 42))
-    overfit_n = int(cfg["train"].get("overfit_n", 64))  # <-- tu peux ajouter ça dans le YAML si tu veux
+    overfit_n = int(cfg["train"].get("overfit_n", 64))
     overfit_n = max(1, overfit_n)
 
     ds = train_loader.dataset
     n_total = len(ds)
     n_take = min(overfit_n, n_total)
 
-    # indices déterministes (reproductible)
     g = torch.Generator()
     g.manual_seed(seed)
     perm = torch.randperm(n_total, generator=g).tolist()
@@ -121,7 +89,6 @@ def make_overfit_loader(train_loader: DataLoader, cfg: dict) -> DataLoader:
 
     subset = Subset(ds, idxs)
 
-    # IMPORTANT: shuffle=True pour overfit (on s’en fiche, mais ça aide)
     return DataLoader(
         subset,
         batch_size=int(cfg["train"]["batch_size"]),
@@ -132,36 +99,67 @@ def make_overfit_loader(train_loader: DataLoader, cfg: dict) -> DataLoader:
     )
 
 
-def first_batch_check(model: nn.Module, train_loader: DataLoader, device: str, num_classes: int):
+@torch.no_grad()
+def _macro_f1_from_preds(preds: torch.Tensor, targets: torch.Tensor, num_classes: int) -> float:
     """
-    - forward sur 1 batch
-    - loss initiale
-    - backward 1 step (sans optimizer.step) pour vérifier grads non nuls
+    Macro-F1 multiclasses, sans sklearn.
+    preds, targets: tensors 1D (N,)
     """
-    model.train()
-    xb, yb = next(iter(train_loader))
-    xb, yb = xb.to(device), yb.to(device)
+    preds = preds.view(-1).to(torch.int64)
+    targets = targets.view(-1).to(torch.int64)
 
-    logits = model(xb)
-    loss = nn.CrossEntropyLoss()(logits, yb)
+    tp = torch.zeros(num_classes, dtype=torch.float64, device=preds.device)
+    fp = torch.zeros(num_classes, dtype=torch.float64, device=preds.device)
+    fn = torch.zeros(num_classes, dtype=torch.float64, device=preds.device)
 
-    expected = -math.log(1.0 / float(num_classes))  # ~ log(num_classes) si logits ~0
-    model.zero_grad(set_to_none=True)
-    loss.backward()
+    for c in range(num_classes):
+        p_c = (preds == c)
+        t_c = (targets == c)
+        tp[c] = (p_c & t_c).sum()
+        fp[c] = (p_c & ~t_c).sum()
+        fn[c] = (~p_c & t_c).sum()
 
-    gn = grad_norm_sum(model)
-    nonzero = (gn > 0.0)
+    precision = tp / (tp + fp + 1e-12)
+    recall = tp / (tp + fn + 1e-12)
+    f1 = 2 * precision * recall / (precision + recall + 1e-12)
 
-    info = {
-        "x_shape": tuple(xb.shape),
-        "y_shape": tuple(yb.shape),
-        "logits_shape": tuple(logits.shape),
-        "loss": float(loss.item()),
-        "expected": float(expected),
-        "grad_norm_sum": float(gn),
-        "grads_nonzero": bool(nonzero),
-    }
-    return info
+    return float(f1.mean().item())
+
+
+@torch.no_grad()
+def eval_epoch(model: nn.Module, loader: DataLoader, device: str, num_classes: int) -> Tuple[float, float, float]:
+    model.eval()
+    loss_fn = nn.CrossEntropyLoss()
+
+    total_loss = 0.0
+    total_correct = 0.0
+    n = 0
+
+    all_preds = []
+    all_targets = []
+
+    for xb, yb in loader:
+        xb, yb = xb.to(device), yb.to(device)
+        logits = model(xb)
+        loss = loss_fn(logits, yb)
+        preds = logits.argmax(dim=1)
+
+        b = yb.size(0)
+        total_loss += float(loss.item()) * b
+        total_correct += float((preds == yb).float().sum().item())
+        n += b
+
+        all_preds.append(preds.detach().cpu())
+        all_targets.append(yb.detach().cpu())
+
+    avg_loss = total_loss / max(1, n)
+    acc = total_correct / max(1, n)
+
+    preds_cat = torch.cat(all_preds, dim=0)
+    targets_cat = torch.cat(all_targets, dim=0)
+    f1 = _macro_f1_from_preds(preds_cat, targets_cat, num_classes=num_classes)
+
+    return avg_loss, acc, f1
 
 
 # ---------------- Main ----------------
@@ -173,16 +171,14 @@ def main():
     parser.add_argument("--overfit_small", action="store_true")
     parser.add_argument("--max_epochs", type=int, default=None)
     parser.add_argument("--max_steps", type=int, default=None)
-    # overrides utiles
     parser.add_argument("--batch_size", type=int, default=None)
     parser.add_argument("--lr", type=float, default=None)
     parser.add_argument("--weight_decay", type=float, default=None)
     args = parser.parse_args()
 
-    # 1) Load config
-    cfg = yaml.safe_load(open(args.config, "r"))
+    cfg: Dict[str, Any] = yaml.safe_load(open(args.config, "r"))
 
-    # 2) Overrides CLI (sans réécrire en dur des valeurs)
+    # overrides CLI
     if args.seed is not None:
         cfg.setdefault("train", {})["seed"] = args.seed
     if args.overfit_small:
@@ -204,52 +200,31 @@ def main():
     device = get_device(cfg["train"])
     print(f"[INFO] device = {device}  seed={seed}")
 
-    # 3) Paths
+    # Paths
     runs_dir = Path(cfg["paths"]["runs_dir"])
     artifacts_dir = Path(cfg["paths"]["artifacts_dir"])
     runs_dir.mkdir(parents=True, exist_ok=True)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
-    best_ckpt = artifacts_dir / "best.ckpt"  # nom exigé
+    best_ckpt = artifacts_dir / "best.ckpt"
 
-    # 4) Data
+    # Data
     train_loader, val_loader, test_loader, meta = get_dataloaders(cfg)
     num_classes = int(meta.get("num_classes", cfg["model"]["num_classes"]))
 
-    # overfit_small => sous-ensemble minuscule
     if bool(cfg["train"].get("overfit_small", False)):
         train_loader = make_overfit_loader(train_loader, cfg)
         print(f"[INFO] overfit_small enabled -> train subset size = {len(train_loader.dataset)}")
 
-    print("MODEL CFG:", cfg.get("model", {}))
-    print("HPARAMS:", cfg.get("hparams", {}))
-    
-    # 5) Model
+    # Model
     model = build_model(cfg).to(device)
 
-    # 6) TensorBoard
+    # TensorBoard
     run_name = time.strftime("run_%Y%m%d_%H%M%S")
     writer = SummaryWriter(log_dir=str(runs_dir / run_name))
-    writer.add_text("meta", str(meta))
     writer.add_text("config_path", str(args.config))
     writer.add_text("seed", str(seed))
 
-    # 7) Check premier batch + loss initiale + grads
-    try:
-        chk = first_batch_check(model, train_loader, device, num_classes=num_classes)
-        print(f"[check] batch x shape = {chk['x_shape']}  y shape = {chk['y_shape']}")
-        print(f"[check] logits shape  = {chk['logits_shape']}")
-        print(f"[check] initial loss  = {chk['loss']:.6f}")
-        print(f"[check] expected ~ -log(1/{num_classes}) = {chk['expected']:.6f}")
-        print(f"[check] grad_norm_sum = {chk['grad_norm_sum']:.6f}  nonzero={chk['grads_nonzero']}")
-        writer.add_scalar("check/initial_loss", chk["loss"], 0)
-        writer.add_scalar("check/expected_loss", chk["expected"], 0)
-        writer.add_scalar("check/grad_norm_sum", chk["grad_norm_sum"], 0)
-    except StopIteration:
-        print("[WARN] train_loader vide ?")
-        writer.close()
-        return
-
-    # 8) Optim / scheduler
+    # Optim / (optionnel) scheduler
     optimizer = build_optimizer(model.parameters(), cfg["train"]["optimizer"])
     sch_cfg = cfg["train"].get("scheduler", {}) or {}
     scheduler = None
@@ -260,9 +235,11 @@ def main():
             gamma=float(sch_cfg.get("gamma", 0.1)),
         )
 
-    # 9) Train loop
+    # Train loop
     loss_fn = nn.CrossEntropyLoss()
-    best_val_acc = -1.0
+    best_val_f1 = -1.0
+    best_val_loss = float("inf")
+
     epochs = int(cfg["train"].get("epochs", 1))
     max_steps = cfg["train"].get("max_steps", None)
     max_steps = int(max_steps) if max_steps is not None else None
@@ -270,7 +247,8 @@ def main():
     global_step = 0
     for epoch in range(1, epochs + 1):
         model.train()
-        running_loss, running_correct, seen = 0.0, 0.0, 0
+        running_loss = 0.0
+        seen = 0
 
         for xb, yb in train_loader:
             xb, yb = xb.to(device), yb.to(device)
@@ -282,35 +260,34 @@ def main():
             optimizer.step()
 
             b = yb.size(0)
-            running_loss += loss.item() * b
-            running_correct += (logits.argmax(1) == yb).float().sum().item()
+            running_loss += float(loss.item()) * b
             seen += b
 
-            # log step (utile surtout en overfit_small)
-            writer.add_scalar("train/loss_step", float(loss.item()), global_step)
             global_step += 1
-
             if max_steps is not None and global_step >= max_steps:
                 break
 
         train_loss = running_loss / max(1, seen)
-        train_acc = running_correct / max(1, seen)
 
-        val_loss, val_acc = eval_epoch(model, val_loader, device)
+        val_loss, val_acc, val_f1 = eval_epoch(model, val_loader, device, num_classes=num_classes)
 
-        # logs epoch
-        writer.add_scalar("train/loss", train_loss, epoch)
-        writer.add_scalar("val/loss", val_loss, epoch)
-        writer.add_scalar("train/accuracy", train_acc, epoch)
-        writer.add_scalar("val/accuracy", val_acc, epoch)
+        # logs EXACTS demandés
+        writer.add_scalar("train/loss", float(train_loss), epoch)
+        writer.add_scalar("val/loss", float(val_loss), epoch)
+        writer.add_scalar("val/accuracy", float(val_acc), epoch)  # utile
+        writer.add_scalar("val/f1", float(val_f1), epoch)         # obligatoire
         writer.add_scalar("lr", float(optimizer.param_groups[0]["lr"]), epoch)
 
-        print(f"[{epoch:03d}] train loss {train_loss:.4f} acc {train_acc:.4f} | "
-              f"val loss {val_loss:.4f} acc {val_acc:.4f}")
+        print(
+            f"[{epoch:03d}] train loss {train_loss:.4f} | "
+            f"val loss {val_loss:.4f} acc {val_acc:.4f} f1 {val_f1:.4f}"
+        )
 
-        # save best
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
+        # save best (priorité à val/f1)
+        improved = (val_f1 > best_val_f1) or (val_f1 == best_val_f1 and val_loss < best_val_loss)
+        if improved:
+            best_val_f1 = float(val_f1)
+            best_val_loss = float(val_loss)
             torch.save({"model": model.state_dict(), "meta": meta, "config": cfg}, best_ckpt)
 
         if scheduler is not None:
@@ -321,7 +298,7 @@ def main():
             break
 
     writer.close()
-    print(f"[BEST] val acc = {best_val_acc:.4f}  -> saved {best_ckpt}")
+    print(f"[BEST] val f1 = {best_val_f1:.4f} (val loss {best_val_loss:.4f}) -> saved {best_ckpt}")
 
 
 if __name__ == "__main__":
