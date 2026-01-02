@@ -393,15 +393,27 @@ De même que passer de width 0.75 à 1.0 (plus de canaux) améliore la val accur
   - Weight decay = `1e-05`
   - Hyperparamètre modèle A = `B=[2,2,2], width=1.0`
   - Hyperparamètre modèle B = `B=[2,2,2], width=0.75`
-  - Batch size = `_____`
-  - Époques = `_____` (10–20)
+  - Batch size = `64`
+  - Époques = `20` (10–20)
 - **Checkpoint** : `artifacts/best.ckpt` (selon meilleure métrique val)
 
 > _Insérer captures TensorBoard :_
 > - `train/loss`, `val/loss`
 > - `val/accuracy` **ou** `val/f1` (classification)
 
+![alt text](image-6.png)
+
+![alt text](image-7.png)
+
 **M6.** Montrez les **courbes train/val** (loss + métrique). Interprétez : sous-apprentissage / sur-apprentissage / stabilité d’entraînement.
+
+Vert modèle A et violet modèle B
+
+Les courbes train/loss et val/loss montrent une diminution au fil des epochs, sans divergence entre entraînement et validation. Cela indique que le modèle apprend efficacement et ne présente pas de sur-apprentissage. La loss de validation suit de près la loss d’entraînement.
+
+Les courbes val/accuracy et val/f1 augmentent de manière stable, sans plateau ni oscillations. L’absence de chute des perf de val exclut un sur-apprentissage et l’amélioration continue des métriques montre que le modèle n’est pas en sous-apprentissage.
+
+On voit que l’entraînement est stable et semble converger correctement. La configuration retenue (notamment avec w = 1.0) offre le meilleur compromis entre vitesse de convergence et performance de généralisation car pour w:1.0 on a des valeurs finales plus élevées de val/accuracy et val/f1, ainsi qu’une val/loss plus faible.
 
 ---
 
