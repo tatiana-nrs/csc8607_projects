@@ -320,45 +320,79 @@ On a aussi la loss de validation qui augmente fortement et l’accuracy de valid
 ## 4) LR finder
 
 - **Méthode** : balayage LR (log-scale), quelques itérations, log `(lr, loss)`
-- **Fenêtre stable retenue** : `[5e-3, 1e-2]`
+- **Fenêtre stable retenue** : `[3e-4, 1e-2]`
 - **Choix pour la suite** :
-  - **LR** = `1e-2`
-  - **Weight decay** = `1e-3` (valeurs classiques : 1e-5, 1e-4)
+  - **LR** = `1e-3`
+  - **Weight decay** = `1e-4` (valeurs classiques : 1e-5, 1e-4)
 
 > _Insérer capture TensorBoard : courbe LR → loss._
 
+![alt text](image-4.png)
+
 **M4.** Justifiez en 2–3 phrases le choix du **LR** et du **weight decay**.
+
+On observe sur la courbe LR → loss que la loss diminue quand le LR augmente jusqu’à environ 1e-2, puis devient instable et commence à remonter : on choisit donc LR = 1e-3, au milieu de la fenêtre stable [3e−4;1e−2], pour garder une convergence rapide sans divergence. Pour la régularisation,1e-4 pour le weight decay donne une courbe quasiment aussi stable que 1e-5 et correspond à une valeur “classique” qui limite l’overfitting sans freiner l’apprentissage.
 
 ---
 
 ## 5) Mini grid search (rapide)
 
 - **Grilles** :
-  - LR : `{_____ , _____ , _____}`
+  - LR : `{5e-4, 1e-3, 2e-3}`
   - Weight decay : `{1e-5, 1e-4}`
-  - Hyperparamètre modèle A : `{_____, _____}`
-  - Hyperparamètre modèle B : `{_____, _____}`
+  - Hyperparamètre modèle A : `{[1,1,1], [2,2,2]}`
+  - Hyperparamètre modèle B : `{0.75, 1.0}`
 
-- **Durée des runs** : `_____` époques par run (1–5 selon dataset), même seed
+- **Durée des runs** : `5` époques par run (1–5 selon dataset), même seed
 
-| Run (nom explicite) | LR    | WD     | Hyp-A | Hyp-B | Val metric (nom=_____) | Val loss | Notes |
-|---------------------|-------|--------|-------|-------|-------------------------|----------|-------|
-|                     |       |        |       |       |                         |          |       |
-|                     |       |        |       |       |                         |          |       |
+| Run (nom explicite)                      | LR   | WD  | B (blocs)| Width  | Val metric (accuracy) | Val loss | Notes |
+|-------------------------------------------|----|----|-----------|-------|------------------------|----------|-------|
+| proj_lr=5e-04_wd=1e-05_B=1,1,1_width=0.75 | 5e-4 | 1e-5 | [1,1,1] | 0.75 | 0.1665 | 3.8543 | Capacité faible |
+| proj_lr=5e-04_wd=1e-05_B=1,1,1_width=1.0 | 5e-4 | 1e-5 | [1,1,1] | 1.0 | 0.1838 | 3.7279 | Width aide légèrement |
+| proj_lr=5e-04_wd=1e-05_B=2,2,2_width=0.75 | 5e-4 | 1e-5 | [2,2,2] | 0.75 | 0.2220 | 3.4233 | Plus de blocs = gain |
+| proj_lr=5e-04_wd=1e-05_B=2,2,2_width=1.0 | 5e-4 | 1e-5 | [2,2,2] | 1.0 | 0.2688 | 3.2171  |
+| proj_lr=5e-04_wd=1e-04_B=1,1,1_width=0.75 | 5e-4 | 1e-4 | [1,1,1] | 0.75 | 0.1653 | 3.8508 | WD pénalise |
+| proj_lr=5e-04_wd=1e-04_B=1,1,1_width=1.0 | 5e-4 | 1e-4 | [1,1,1] | 1.0 | 0.1839 | 3.7159 | WD élevé limite gain |
+| proj_lr=5e-04_wd=1e-04_B=2,2,2_width=0.75 | 5e-4 | 1e-4 | [2,2,2] | 0.75 | 0.2231 | 3.4224 | Comparable à WD faible |
+| proj_lr=5e-04_wd=1e-04_B=2,2,2_width=1.0 | 5e-4 | 1e-4 | [2,2,2] | 1.0 | 0.2622 | 3.2328 | WD limite un peu |
+| proj_lr=1e-03_wd=1e-05_B=1,1,1_width=0.75 | 1e-3 | 1e-5 | [1,1,1] | 0.75 | 0.1992 | 3.6471 | LR plus efficace |
+| proj_lr=1e-03_wd=1e-05_B=1,1,1_width=1.0 | 1e-3 | 1e-5 | [1,1,1] | 1.0 | 0.2040 | 3.5941 | Width améliore |
+| proj_lr=1e-03_wd=1e-05_B=2,2,2_width=0.75 | 1e-3 | 1e-5 | [2,2,2] | 0.75 | 0.2797 | 3.1509 | Bon |
+| proj_lr=1e-03_wd=1e-05_B=2,2,2_width=1.0 | 1e-3 | 1e-5 | [2,2,2] | 1.0 | 0.3022 | 3.0007 | Très bonne convergence |
+| proj_lr=1e-03_wd=1e-04_B=1,1,1_width=0.75 | 1e-3 | 1e-4 | [1,1,1] | 0.75 | 0.2005 | 3.6305 | WD limite |
+| proj_lr=1e-03_wd=1e-04_B=1,1,1_width=1.0 | 1e-3 | 1e-4 | [1,1,1] | 1.0 | 0.2086 | 3.5832 | Stable |
+| proj_lr=1e-03_wd=1e-04_B=2,2,2_width=0.75 | 1e-3 | 1e-4 | [2,2,2] | 0.75 | 0.2670 | 3.1655 | WD pénalise légèrement |
+| proj_lr=1e-03_wd=1e-04_B=2,2,2_width=1.0 | 1e-3 | 1e-4 | [2,2,2] | 1.0 | 0.2912 | 3.0380 | Correct mais < WD faible |
+| proj_lr=2e-03_wd=1e-05_B=1,1,1_width=0.75 | 2e-3 | 1e-5 | [1,1,1] | 0.75 | 0.2347 | 3.4264 | LR élevé aide |
+| proj_lr=2e-03_wd=1e-05_B=1,1,1_width=1.0 | 2e-3 | 1e-5 | [1,1,1] | 1.0 | 0.2350 | 3.4355 | Non |
+| proj_lr=2e-03_wd=1e-05_B=2,2,2_width=0.75 | 2e-3 | 1e-5 | [2,2,2] | 0.75 | 0.2947 | 3.0720 | Très bon |
+| proj_lr=2e-03_wd=1e-05_B=2,2,2_width=1.0  | 2e-3 | 1e-5 | [2,2,2] | 1.0 | **0.3176** | **2.9169** | Meilleur run |
+| proj_lr=2e-03_wd=1e-04_B=1,1,1_width=0.75 | 2e-3 | 1e-4 | [1,1,1] | 0.75 | 0.2330 | 3.4289 | WD trop fort |
+| proj_lr=2e-03_wd=1e-04_B=1,1,1_width=1.0 | 2e-3 | 1e-4 | [1,1,1] | 1.0 | 0.2244 | 3.4761 | Dégradation |
+| proj_lr=2e-03_wd=1e-04_B=2,2,2_width=0.75 | 2e-3 | 1e-4 | [2,2,2] | 0.75 | 0.2927 | 3.0568 | Correct |
+| proj_lr=2e-03_wd=1e-04_B=2,2,2_width=1.0 | 2e-3 | 1e-4 | [2,2,2] | 1.0 | 0.3112 | 2.9899 | WD limite |
 
 > _Insérer capture TensorBoard (onglet HParams/Scalars) ou tableau récapitulatif._
 
+![alt text](image-5.png)
+
 **M5.** Présentez la **meilleure combinaison** (selon validation) et commentez l’effet des **2 hyperparamètres de modèle** sur les courbes (stabilité, vitesse, overfit).
+
+La meilleure combinaison est pour LR = 2e-3, WD = 1e-5, B = [2,2,2], width = 1.0, avec best_val_acc = 0.3176 (on a best_val_loss = 2.9169).
+
+On remarque que passer de B=[1,1,1] à [2,2,2] (plus de blocs / capacité) améliore l'accuracy de la val et fait baisser la loss plus vite : le modèle apprend mieux en quelques époques (convergence plus rapide)
+
+De même que passer de width 0.75 à 1.0 (plus de canaux) améliore la val accuracy surtout quand B vaut [2,2,2]. On a une meilleure performance sans signe d’overfit sur ces runs (5 epoch).
 
 ---
 
 ## 6) Entraînement complet (10–20 époques, sans scheduler)
 
 - **Configuration finale** :
-  - LR = `_____`
-  - Weight decay = `_____`
-  - Hyperparamètre modèle A = `_____`
-  - Hyperparamètre modèle B = `_____`
+  - LR = `0.002`
+  - Weight decay = `1e-05`
+  - Hyperparamètre modèle A = `B=[2,2,2], width=1.0`
+  - Hyperparamètre modèle B = `B=[2,2,2], width=0.75`
   - Batch size = `_____`
   - Époques = `_____` (10–20)
 - **Checkpoint** : `artifacts/best.ckpt` (selon meilleure métrique val)

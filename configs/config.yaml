@@ -36,6 +36,8 @@ model:
   type: dsconvnet                # ex: "resnet18", "mlp", "lstm", ...
   num_classes: 200
   input_shape: [3, 64, 64]             # ex: [3, 32, 32] ou null
+  B: [2, 2, 2]
+  width: 0.75
   hidden_sizes:             # ex: [256, 128] ou null
   activation: relu          # ex: relu, gelu, tanh...
   dropout: 0.0              # ex: 0.0–0.5
@@ -49,6 +51,8 @@ model:
     bidirectional: false
 
 train:
+  scheduler:
+    name: none
   seed: 42
   device: auto              # "cpu", "cuda", ou "auto"
   batch_size: 64
