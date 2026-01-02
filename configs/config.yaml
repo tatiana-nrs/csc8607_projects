@@ -37,7 +37,7 @@ model:
   num_classes: 200
   input_shape: [3, 64, 64]             # ex: [3, 32, 32] ou null
   B: [2, 2, 2]
-  width: 0.75
+  width: 1.0
   hidden_sizes:             # ex: [256, 128] ou null
   activation: relu          # ex: relu, gelu, tanh...
   dropout: 0.0              # ex: 0.0–0.5
@@ -63,7 +63,7 @@ train:
   optimizer:
     name: adam              # sgd/adam/rmsprop
     lr: 0.002
-    weight_decay: 0.0001
+    weight_decay: 0.00001
     # momentum: 0.9           # utile si SGD
 
   scheduler:
