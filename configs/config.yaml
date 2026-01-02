@@ -36,7 +36,7 @@ model:
   type: dsconvnet                # ex: "resnet18", "mlp", "lstm", ...
   num_classes: 200
   input_shape: [3, 64, 64]             # ex: [3, 32, 32] ou null
-  B: [2, 2, 2]
+  B: [1, 1, 1]
   width: 1.0
   hidden_sizes:             # ex: [256, 128] ou null
   activation: relu          # ex: relu, gelu, tanh...

@@ -401,19 +401,15 @@ De même que passer de width 0.75 à 1.0 (plus de canaux) améliore la val accur
 > - `train/loss`, `val/loss`
 > - `val/accuracy` **ou** `val/f1` (classification)
 
-![alt text](image-6.png)
+![alt text](image-8.png)
 
-![alt text](image-7.png)
+![alt text](image-9.png)
 
 **M6.** Montrez les **courbes train/val** (loss + métrique). Interprétez : sous-apprentissage / sur-apprentissage / stabilité d’entraînement.
 
-Vert modèle A et violet modèle B
+Orange modèle A et bleu modèle B
 
-Les courbes train/loss et val/loss montrent une diminution au fil des epochs, sans divergence entre entraînement et validation. Cela indique que le modèle apprend efficacement et ne présente pas de sur-apprentissage. La loss de validation suit de près la loss d’entraînement.
-
-Les courbes val/accuracy et val/f1 augmentent de manière stable, sans plateau ni oscillations. L’absence de chute des perf de val exclut un sur-apprentissage et l’amélioration continue des métriques montre que le modèle n’est pas en sous-apprentissage.
-
-On voit que l’entraînement est stable et semble converger correctement. La configuration retenue (notamment avec w = 1.0) offre le meilleur compromis entre vitesse de convergence et performance de généralisation car pour w:1.0 on a des valeurs finales plus élevées de val/accuracy et val/f1, ainsi qu’une val/loss plus faible.
+Les courbes train/loss et val/loss décroissent globalement sur 20 epochs ce qui indique une optimisation correcte et stable (pas d’explosion ni de divergence). On observe un léger écart entre train/loss (1.99 à l’epoch 20) et val/loss (2.35) mais la validation continue de s’améliorer (0.44) donc pas de sur-apprentissage marqué ici. La configuration width=1.0 est la meilleure car elle atteint les meilleures métriques de validation (val/accuracy ≈0.44, val/f1 ≈0.44) et la plus faible val/loss (2.35) contre val/f1 ≈0.40 pour width=0.75 et montre davantage d’oscillations de val/loss.
 
 ---
 
