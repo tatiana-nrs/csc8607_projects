@@ -219,8 +219,32 @@ def main():
     model = build_model(cfg).to(device)
 
     # TensorBoard
-    run_name = time.strftime("run_%Y%m%d_%H%M%S")
+    # ==== Nom de run explicite (pour TensorBoard / rapport) ====
+    opt_cfg = cfg["train"]["optimizer"]
+    lr = opt_cfg.get("lr")
+    wd = opt_cfg.get("weight_decay")
+
+    model_cfg = cfg.get("model", {})
+    B = model_cfg.get("B", "NA")
+    width = model_cfg.get("width", "NA")
+
+    epochs = cfg["train"].get("epochs", "NA")
+    seed = cfg["train"].get("seed", "NA")
+
+    B_str = ",".join(map(str, B)) if isinstance(B, list) else str(B)
+
+    run_name = (
+        f"dsconvnet_"
+        f"lr={lr:g}_"
+        f"wd={wd:g}_"
+        f"B={B_str}_"
+        f"w={width}_"
+        f"ep={epochs}_"
+        f"seed={seed}"
+)
+
     writer = SummaryWriter(log_dir=str(runs_dir / run_name))
+
     writer.add_text("config_path", str(args.config))
     writer.add_text("seed", str(seed))
 
