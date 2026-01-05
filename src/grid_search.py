@@ -146,14 +146,14 @@ def _run_one(
         train_loss = running_loss / max(1, n)
         train_acc = running_correct / max(1, n)
 
+        num_classes = int(meta.get("num_classes", cfg["model"]["num_classes"]))
+
         val_loss, val_acc, val_f1 = eval_epoch(
             model,
             val_loader,
             device,
             num_classes=int(meta["num_classes"])
         )
-
-        num_classes = int(meta.get("num_classes", cfg["model"]["num_classes"]))
 
         writer.add_scalar("train/loss", train_loss, epoch)
         writer.add_scalar("train/accuracy", train_acc, epoch)
