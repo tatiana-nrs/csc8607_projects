@@ -1,0 +1,20 @@
+[INFO] device = cuda  seed=42
+MODEL CFG: {'type': 'dsconvnet', 'num_classes': 200, 'input_shape': [3, 64, 64], 'B': [2, 2, 2], 'width': 0.75, 'hidden_sizes': None, 'activation': 'relu', 'dropout': 0.0, 'batch_norm': True, 'residual': False, 'attention': False, 'rnn': {'type': None, 'hidden_size': None, 'num_layers': None, 'bidirectional': False}}
+HPARAMS: {'lr': ['5e-4', '1e-3', '2e-3'], 'batch_size': [64, 128], 'weight_decay': ['1e-5', '1e-4'], 'B': [[1, 1, 1], [2, 2, 2]], 'width': [0.75, 1.0]}
+[check] batch x shape = (64, 3, 64, 64)  y shape = (64,)
+[check] logits shape  = (64, 200)
+[check] initial loss  = 5.328436
+[check] expected ~ -log(1/200) = 5.298317
+[check] grad_norm_sum = 2.666390  nonzero=True
+[001] train loss 4.4112 acc 0.0852 | val loss 4.1289 acc 0.1130
+[002] train loss 3.7795 acc 0.1649 | val loss 3.7526 acc 0.1678
+Traceback (most recent call last):
+  File "/mnt/hdd/homes/tniauronis/.local/share/mamba/envs/csc8607_env/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/mnt/hdd/homes/tniauronis/.local/share/mamba/envs/csc8607_env/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/mnt/hdd/homes/tniauronis/csc8607_projects/src/train.py", line 328, in <module>
+    main()
+  File "/mnt/hdd/homes/tniauronis/csc8607_projects/src/train.py", line 285, in main
+    running_loss += loss.item() * b
+KeyboardInterrupt
