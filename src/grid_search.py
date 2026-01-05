@@ -146,13 +146,19 @@ def _run_one(
         train_loss = running_loss / max(1, n)
         train_acc = running_correct / max(1, n)
 
-        val_loss, val_acc = eval_epoch(model, val_loader, device)
+        val_loss, val_acc, val_f1 = eval_epoch(
+            model,
+            val_loader,
+            device,
+            num_classes=int(meta["num_classes"])
+        )
 
         writer.add_scalar("train/loss", train_loss, epoch)
         writer.add_scalar("train/accuracy", train_acc, epoch)
         writer.add_scalar("val/loss", val_loss, epoch)
         writer.add_scalar("val/accuracy", val_acc, epoch)
         writer.add_scalar("hp/lr", float(combo["lr"]), epoch)
+        writer.add_scalar("val/f1", val_f1, epoch)
         writer.add_scalar("hp/weight_decay", float(combo["weight_decay"]), epoch)
 
         if val_acc > best_val_acc:
