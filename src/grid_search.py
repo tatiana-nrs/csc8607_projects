@@ -153,6 +153,8 @@ def _run_one(
             num_classes=int(meta["num_classes"])
         )
 
+        num_classes = int(meta.get("num_classes", cfg["model"]["num_classes"]))
+
         writer.add_scalar("train/loss", train_loss, epoch)
         writer.add_scalar("train/accuracy", train_acc, epoch)
         writer.add_scalar("val/loss", val_loss, epoch)
