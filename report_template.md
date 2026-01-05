@@ -415,13 +415,35 @@ Les courbes train/loss et val/loss décroissent globalement sur 20 epochs ce qui
 
 ## 7) Comparaisons de courbes (analyse)
 
-> _Superposez plusieurs runs dans TensorBoard et insérez 2–3 captures :_
+> _Superposez plusieurs runs dans TensorBoard et insérez 2–3 captures :
+
+![alt text](image-10.png)
+
+![alt text](image-11.png)
 
 - **Variation du LR** (impact au début d’entraînement)
 - **Variation du weight decay** (écart train/val, régularisation)
 - **Variation des 2 hyperparamètres de modèle** (convergence, plateau, surcapacité)
 
 **M7.** Trois **comparaisons** commentées (une phrase chacune) : LR, weight decay, hyperparamètres modèle — ce que vous attendiez vs. ce que vous observez.
+
+Dans les figures, le run jaune correspond au modèle de référence (B=[2,2,2], w=1.0, LR=2e-3, WD=1e-5), le violet à la réduction de width (w=0.75), le vert à un LR plus faible (1e-3), l’orange à un weight decay plus élevé (1e-4), et le bleu foncé à un modèle avec moins de blocs (B=[1,1,1]).
+
+**(i) Variation du learning rate (LR)**
+
+Attendu : On a diminué le LR à 1e-3 donc on s'attend à une convergence plus lente
+Observé : avec LR = 2e-3 (le plus optimal), la loss d’entraînement diminue plus rapidement et les métriques de validation (accuracy, F1) atteignent un meilleur niveau qu’avec LR = 1e-3 ce qui indique que 2e-3 est mieux adapté à ce modèle et ce dataset.
+
+**(ii) Variation du weight decay (WD)**
+
+Attendu : un weight decay plus fort doit renforcer la régularisation et réduire l’overfitting et je m'attendais à avoir une convergence plus lente.
+Observé : avec WD = 1e-4, la convergence est légèrement plus lente et les performances de val sont inférieures à WD = 1e-5. Donc 1e-5 est le meilleur ici.
+
+**(iii) Variation des hyperparamètres du modèle (B et width)**
+
+Attendu : réduire le nombre de blocs à 1 réduit la capacité du modèle et donc doit ralentir la convergence et limiter les performances maximales.
+Observé : le modèle B=[1,1,1], width=1.0 converge bien plus lentement et on a le F1 et l'accuracy moins bons que B=[2,2,2], width=1.0. On voti ici un sous-apprentissage.
+
 
 ---
 
