@@ -417,9 +417,9 @@ Les courbes train/loss et val/loss décroissent globalement sur 20 epochs ce qui
 
 > _Superposez plusieurs runs dans TensorBoard et insérez 2–3 captures :
 
-![alt text](image-10.png)
-
 ![alt text](image-11.png)
+
+![alt text](image-10.png)
 
 - **Variation du LR** (impact au début d’entraînement)
 - **Variation du weight decay** (écart train/val, régularisation)
