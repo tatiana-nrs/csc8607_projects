@@ -154,6 +154,11 @@ def _run_one(
         writer.add_scalar("val/accuracy", val_acc, epoch)
         writer.add_scalar("hp/lr", float(combo["lr"]), epoch)
         writer.add_scalar("hp/weight_decay", float(combo["weight_decay"]), epoch)
+        writer.add_text(
+            "hparams",
+            "\n".join([f"{k}: {v}" for k, v in hparams_tb.items()])
+        )
+
 
         if val_acc > best_val_acc:
             best_val_acc = float(val_acc)
@@ -161,13 +166,6 @@ def _run_one(
 
         if max_steps is not None and global_step >= max_steps:
             break
-
-    # HParams summary (1 seule fois à la fin)
-    metrics_tb = {
-        "best_val_acc": best_val_acc,
-        "best_val_loss": best_val_loss,
-    }
-    writer.add_hparams(hparams_tb, metrics_tb)
 
     writer.close()
     print(f"[RUN DONE] {run_name} -> best_val_acc={best_val_acc:.4f} best_val_loss={best_val_loss:.4f}")
