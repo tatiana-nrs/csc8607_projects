@@ -286,7 +286,7 @@ En comptant des convolutions sans biais et on obtient les totaux suivants :
 ### 2.3 Perte initiale & premier batch
 
 - **Loss initiale attendue** (multi-classe) ≈ `-log(1/200)=log(200)` ~ 5.298
-- **Observée sur un batch** : `_____`
+- **Observée sur un batch** : `5.312`
 - **Vérification** : backward OK, gradients ≠ 0
 
 **M2.** Donnez la **loss initiale** observée et dites si elle est cohérente. Indiquez la forme du batch et la forme de sortie du modèle.
