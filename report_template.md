@@ -460,10 +460,12 @@ Observé : le modèle B=[1,1,1], width=1.0 converge bien plus lentement et on a 
 
 - **Checkpoint évalué** : `artifacts/best.ckpt`
 - **Métriques test** :
-  - Metric principale (nom = `_____`) : `_____`
-  - Metric(s) secondaire(s) : `_____`
+  - Metric principale (nom = `F1 `) : `0.4425`
+  - Metric(s) secondaire(s) : `Accuracy : 0.4426 et loss : 2.3577`
 
 **M9.** Donnez les **résultats test** et comparez-les à la validation (écart raisonnable ? surapprentissage probable ?).
+
+Les performances obtenues sur le jeu de test sont très proches de celles observées sur le jeu de validation (F1 validation ≈ 0.44). L’écart entre validation et test est faible et reste dans une plage raisonnable ce qui indique une bonne capacité de généralisation du modèle. Les loss ne divergent pas donc on n'a pas de sur-apprentissage.
 
 ---
 

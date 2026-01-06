@@ -101,10 +101,6 @@ def make_overfit_loader(train_loader: DataLoader, cfg: dict) -> DataLoader:
 
 @torch.no_grad()
 def _macro_f1_from_preds(preds: torch.Tensor, targets: torch.Tensor, num_classes: int) -> float:
-    """
-    Macro-F1 multiclasses, sans sklearn.
-    preds, targets: tensors 1D (N,)
-    """
     preds = preds.view(-1).to(torch.int64)
     targets = targets.view(-1).to(torch.int64)
 
@@ -218,18 +214,17 @@ def main():
     # Model
     model = build_model(cfg).to(device)
 
-    # TensorBoard
-    # ==== Nom de run explicite (pour TensorBoard / rapport) ====
+    # TensorBoard (nom explicite)
     opt_cfg = cfg["train"]["optimizer"]
-    lr = opt_cfg.get("lr")
-    wd = opt_cfg.get("weight_decay")
+    lr = float(opt_cfg.get("lr"))
+    wd = float(opt_cfg.get("weight_decay"))
 
     model_cfg = cfg.get("model", {})
     B = model_cfg.get("B", "NA")
     width = model_cfg.get("width", "NA")
 
-    epochs = cfg["train"].get("epochs", "NA")
-    seed = cfg["train"].get("seed", "NA")
+    epochs = int(cfg["train"].get("epochs", 1))
+    seed = int(cfg["train"].get("seed", 42))
 
     B_str = ",".join(map(str, B)) if isinstance(B, list) else str(B)
 
@@ -241,14 +236,13 @@ def main():
         f"w={width}_"
         f"ep={epochs}_"
         f"seed={seed}"
-)
+    )
 
     writer = SummaryWriter(log_dir=str(runs_dir / run_name))
-
     writer.add_text("config_path", str(args.config))
     writer.add_text("seed", str(seed))
 
-    # Optim / (optionnel) scheduler
+    # Optim / scheduler
     optimizer = build_optimizer(model.parameters(), cfg["train"]["optimizer"])
     sch_cfg = cfg["train"].get("scheduler", {}) or {}
     scheduler = None
@@ -259,12 +253,25 @@ def main():
             gamma=float(sch_cfg.get("gamma", 0.1)),
         )
 
-    # Train loop
+    # ===== Loss initiale (AVANT entraînement) =====
     loss_fn = nn.CrossEntropyLoss()
+    model.eval()
+    xb0, yb0 = next(iter(train_loader))
+    xb0, yb0 = xb0.to(device), yb0.to(device)
+    with torch.no_grad():
+        logits0 = model(xb0)
+        init_loss = loss_fn(logits0, yb0).item()
+
+    theo_loss = float(torch.log(torch.tensor(float(num_classes))).item())  # -log(1/C) = log(C)
+    print(f"[INIT] batch shape={tuple(xb0.shape)} num_classes={num_classes} "
+          f"init_loss={init_loss:.4f} theo_logC={theo_loss:.4f}")
+    writer.add_scalar("train/init_loss", float(init_loss), 0)
+    writer.add_scalar("train/theo_logC", float(theo_loss), 0)
+
+    # ===== Train loop =====
     best_val_f1 = -1.0
     best_val_loss = float("inf")
 
-    epochs = int(cfg["train"].get("epochs", 1))
     max_steps = cfg["train"].get("max_steps", None)
     max_steps = int(max_steps) if max_steps is not None else None
 
@@ -298,8 +305,8 @@ def main():
         # logs EXACTS demandés
         writer.add_scalar("train/loss", float(train_loss), epoch)
         writer.add_scalar("val/loss", float(val_loss), epoch)
-        writer.add_scalar("val/accuracy", float(val_acc), epoch)  # utile
-        writer.add_scalar("val/f1", float(val_f1), epoch)         # obligatoire
+        writer.add_scalar("val/accuracy", float(val_acc), epoch)
+        writer.add_scalar("val/f1", float(val_f1), epoch)
         writer.add_scalar("lr", float(optimizer.param_groups[0]["lr"]), epoch)
 
         print(
@@ -307,7 +314,6 @@ def main():
             f"val loss {val_loss:.4f} acc {val_acc:.4f} f1 {val_f1:.4f}"
         )
 
-        # save best (priorité à val/f1)
         improved = (val_f1 > best_val_f1) or (val_f1 == best_val_f1 and val_loss < best_val_loss)
         if improved:
             best_val_f1 = float(val_f1)
