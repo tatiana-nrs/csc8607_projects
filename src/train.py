@@ -201,7 +201,7 @@ def main():
     artifacts_dir = Path(cfg["paths"]["artifacts_dir"])
     runs_dir.mkdir(parents=True, exist_ok=True)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
-    best_ckpt = artifacts_dir / "best2.ckpt"
+    best_ckpt = artifacts_dir / "best.ckpt"
 
     # Data
     train_loader, val_loader, test_loader, meta = get_dataloaders(cfg)

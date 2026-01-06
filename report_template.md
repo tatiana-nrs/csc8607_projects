@@ -300,7 +300,7 @@ On a une loss initiale de 5.312 ce qui est proche de la loss initiale attendue d
 - **Sous-ensemble train** : `N = 256` exemples
 - **Hyperparamètres modèle utilisés** (les 2 à régler) : `(B1,B2,B3) = (2,2,2)`, `w = 1.0`
 - **Optimisation** : LR = `0.01`, weight decay = `0` (0 ou très faible recommandé)
-- **Nombre d’époques** : `50`
+- **Nombre d’époques** : `20`
 
 > _Insérer capture TensorBoard : `train/loss` montrant la descente vers ~0._
 
@@ -454,6 +454,10 @@ Observé : le modèle B=[1,1,1], width=1.0 converge bien plus lentement et on a 
 
 **M8.** Décrivez cette itération, la motivation et le résultat.
 
+![alt text](image-13.png)
+
+![alt text](image-12.png)
+
 J'ai voulu tester une toute autre valeur pour B et les passer à [3, 3, 3]. En effet, comme B contrôle le nombre de blocs et donc la capacité, je me suis dit qu'une plus grande capacité donnerait de meilleurs résultats. On observe une amélioration en validation ou val/f1 passe de 0.43 à 0.48 donc on a une meilleure généralisation.
 
 ---
@@ -473,22 +477,47 @@ Les performances obtenues sur le jeu de test sont très proches de celles observ
 
 ## 10) Limites, erreurs & bug diary (court)
 
-- **Limites connues** (données, compute, modèle) :
-- **Erreurs rencontrées** (shape mismatch, divergence, NaN…) et **solutions** :
-- **Idées « si plus de temps/compute »** (une phrase) :
+- **Limites connues** (données, compute, modèle) : Apprentissage et généralisation plus compliqués étant donné les 200 classes et le bloc [2, 2, 2]
+- **Erreurs rencontrées** (shape mismatch, divergence, NaN…) et **solutions** : J'avais des duplication au niveau des runs dans TensorBoard et les runs étaient mal renommés donc je ne m'y retrouvais plus. J'ai donc fixé des conventions de nommage et le problème a été résolu.
+- **Idées « si plus de temps/compute »** (une phrase) : J'aurais aimé tester une architecture plus profonde et augmenter le nombre d'epochs pour observer le comportement de mon modèle.
 
 ---
 
 ## 11) Reproductibilité
 
-- **Seed** : `_____`
+- **Seed** : `42`
 - **Config utilisée** : joindre un extrait de `configs/config.yaml` (sections pertinentes)
 - **Commandes exactes** :
 
 ```bash
 # Exemple (remplacer par vos commandes effectives)
-python -m src.train --config configs/config.yaml --max_epochs 15
+
+# Sanity check
+python -m src.sanity-check --config configs/config.yaml --n 8
+
+# Pour les baselines
+python -m src.baselines --config configs/config.yaml
+
+# Overfit 
+python -m src.train --config configs/config.yaml --overfit_small --max_epochs 20
+
+# LR finder
+python -m src.lr_finder --config configs/config.yaml 
+
+#Grid search
+python -m src.grid_search --config configs/config.yaml
+
+# Entraînement du meilleur modèle
+python -m src.train \
+  --config configs/config.yaml \
+  --lr 2e-3 \
+  --weight_decay 1e-5 \
+  --max_epochs 20 \
+  --seed 42
+
+# Évaluation finale sur le test
 python -m src.evaluate --config configs/config.yaml --checkpoint artifacts/best.ckpt
+
 ````
 
 * **Artifacts requis présents** :
