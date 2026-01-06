@@ -265,8 +265,6 @@ def main():
     theo_loss = float(torch.log(torch.tensor(float(num_classes))).item())  # -log(1/C) = log(C)
     print(f"[INIT] batch shape={tuple(xb0.shape)} num_classes={num_classes} "
           f"init_loss={init_loss:.4f} theo_logC={theo_loss:.4f}")
-    writer.add_scalar("train/init_loss", float(init_loss), 0)
-    writer.add_scalar("train/theo_logC", float(theo_loss), 0)
 
     # ===== Train loop =====
     best_val_f1 = -1.0

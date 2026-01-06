@@ -449,10 +449,12 @@ Observé : le modèle B=[1,1,1], width=1.0 converge bien plus lentement et on a 
 
 ## 8) Itération supplémentaire (si temps)
 
-- **Changement(s)** : `_____` (resserrage de grille, nouvelle valeur d’un hyperparamètre, etc.)
-- **Résultat** : `_____` (val metric, tendances des courbes)
+- **Changement(s)** : `B =[3, 3, 3]` (resserrage de grille, nouvelle valeur d’un hyperparamètre, etc.)
+- **Résultat** : `amélioration du F1 de la val ` (val metric, tendances des courbes)
 
 **M8.** Décrivez cette itération, la motivation et le résultat.
+
+J'ai voulu tester une toute autre valeur pour B et les passer à [3, 3, 3]. En effet, comme B contrôle le nombre de blocs et donc la capacité, je me suis dit qu'une plus grande capacité donnerait de meilleurs résultats. On observe une amélioration en validation ou val/f1 passe de 0.43 à 0.48 donc on a une meilleure généralisation.
 
 ---
 
