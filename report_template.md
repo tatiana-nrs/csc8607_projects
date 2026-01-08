@@ -306,7 +306,6 @@ On a une loss initiale de 5.312 ce qui est proche de la loss initiale attendue d
 
 ![alt text](img/image-3.png)
 
-
 **M3.** Donnez la **taille du sous-ensemble**, les **hyperparamètres** du modèle utilisés, et la **courbe train/loss** (capture). Expliquez ce qui prouve l’overfit.
 
 Le modèle a été entraîné en mode overfit sur un sous-ensemble de 64 images extrait du jeu d’entraînement.
@@ -487,6 +486,38 @@ Les performances obtenues sur le jeu de test sont très proches de celles observ
 
 - **Seed** : `42`
 - **Config utilisée** : joindre un extrait de `configs/config.yaml` (sections pertinentes)
+
+```
+augment:
+  random_flip: true
+  random_crop:
+    size: [64, 64]
+    scale: [0.8, 1.0]
+    ratio: [0.75, 1.3333]
+
+model:
+  type: dsconvnet
+  num_classes: 200
+  input_shape: [3, 64, 64]
+  B: [2, 2, 2]
+  width: 1.0
+  activation: relu
+  dropout: 0.0
+  batch_norm: true
+
+train:
+  seed: 42
+  device: auto
+  batch_size: 64
+  epochs: 20
+
+  optimizer:
+    name: adam
+    lr: 0.002
+    weight_decay: 1e-5
+
+```
+
 - **Commandes exactes** :
 
 ```bash
