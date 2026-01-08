@@ -1,17 +1,14 @@
-# src/train.py
 """
-Entraînement principal.
+Entraînement principal (à implémenter par l'étudiant·e).
 
-Exécution :
+Doit exposer un main() exécutable via :
     python -m src.train --config configs/config.yaml [--seed 42]
 
-Exigences :
+Exigences minimales :
 - lire la config YAML
-- respecter paths.runs_dir et paths.artifacts_dir
-- logger train/loss et val/loss (tags EXACTS)
-- logger une métrique de classification : val/f1 (obligatoire) (+ val/accuracy utile)
-- supporter --overfit_small
-- sauvegarder le meilleur checkpoint (selon val/f1) dans artifacts/best.ckpt
+- respecter les chemins 'runs/' et 'artifacts/' définis dans la config
+- journaliser les scalars 'train/loss' et 'val/loss' (et au moins une métrique de classification si applicable)
+- supporter le flag --overfit_small (si True, sur-apprendre sur un très petit échantillon)
 """
 
 from __future__ import annotations
@@ -30,9 +27,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 from src.data_loading import get_dataloaders
 from src.model import build_model
-
-
-# ---------------- Utils ----------------
 
 def set_seed(seed: int | None):
     if seed is None:
@@ -158,8 +152,6 @@ def eval_epoch(model: nn.Module, loader: DataLoader, device: str, num_classes: i
     return avg_loss, acc, f1
 
 
-# ---------------- Main ----------------
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, required=True)
@@ -174,7 +166,6 @@ def main():
 
     cfg: Dict[str, Any] = yaml.safe_load(open(args.config, "r"))
 
-    # overrides CLI
     if args.seed is not None:
         cfg.setdefault("train", {})["seed"] = args.seed
     if args.overfit_small:
@@ -196,14 +187,14 @@ def main():
     device = get_device(cfg["train"])
     print(f"[INFO] device = {device}  seed={seed}")
 
-    # Paths
+    #paths
     runs_dir = Path(cfg["paths"]["runs_dir"])
     artifacts_dir = Path(cfg["paths"]["artifacts_dir"])
     runs_dir.mkdir(parents=True, exist_ok=True)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     best_ckpt = artifacts_dir / "best.ckpt"
 
-    # Data
+    #data
     train_loader, val_loader, test_loader, meta = get_dataloaders(cfg)
     num_classes = int(meta.get("num_classes", cfg["model"]["num_classes"]))
 
@@ -211,10 +202,9 @@ def main():
         train_loader = make_overfit_loader(train_loader, cfg)
         print(f"[INFO] overfit_small enabled -> train subset size = {len(train_loader.dataset)}")
 
-    # Model
+    #model
     model = build_model(cfg).to(device)
 
-    # TensorBoard (nom explicite)
     opt_cfg = cfg["train"]["optimizer"]
     lr = float(opt_cfg.get("lr"))
     wd = float(opt_cfg.get("weight_decay"))
@@ -242,7 +232,6 @@ def main():
     writer.add_text("config_path", str(args.config))
     writer.add_text("seed", str(seed))
 
-    # Optim / scheduler
     optimizer = build_optimizer(model.parameters(), cfg["train"]["optimizer"])
     sch_cfg = cfg["train"].get("scheduler", {}) or {}
     scheduler = None
@@ -253,7 +242,7 @@ def main():
             gamma=float(sch_cfg.get("gamma", 0.1)),
         )
 
-    # ===== Loss initiale (AVANT entraînement) =====
+    #loss initiale
     loss_fn = nn.CrossEntropyLoss()
     model.eval()
     xb0, yb0 = next(iter(train_loader))
@@ -266,7 +255,6 @@ def main():
     print(f"[INIT] batch shape={tuple(xb0.shape)} num_classes={num_classes} "
           f"init_loss={init_loss:.4f} theo_logC={theo_loss:.4f}")
 
-    # ===== Train loop =====
     best_val_f1 = -1.0
     best_val_loss = float("inf")
 
@@ -300,7 +288,7 @@ def main():
 
         val_loss, val_acc, val_f1 = eval_epoch(model, val_loader, device, num_classes=num_classes)
 
-        # logs EXACTS demandés
+        #metriques
         writer.add_scalar("train/loss", float(train_loss), epoch)
         writer.add_scalar("val/loss", float(val_loss), epoch)
         writer.add_scalar("val/accuracy", float(val_acc), epoch)

@@ -7,7 +7,7 @@ get_dataloaders(config: dict) -> (train_loader, val_loader, test_loader, meta: d
 
 meta doit contenir au minimum :
 - "num_classes": int
-- "input_shape": tuple
+- "input_shape": tuple (ex: (3, 32, 32) pour des images)
 """
 
 from typing import Dict, Any, Tuple
@@ -23,7 +23,6 @@ from src.augmentation import get_augmentation_transforms
 
 
 class HFDatasetTorch(Dataset):
-    """Wrapper HF Dataset -> PyTorch Dataset avec transforms."""
     def __init__(
         self,
         hf_ds,
@@ -48,20 +47,23 @@ class HFDatasetTorch(Dataset):
         img = item[self.image_key]
         y = item[self.label_key]
 
-        # Augmentations : train uniquement
+        # Augmentation train uniquement
         if self.is_train and self.augment is not None:
             img = self.augment(img)
 
-        # Preprocess : train/val/test (invariant)
+        # Preprocess train/val/test 
         if self.preprocess is not None:
             img = self.preprocess(img)
 
-        # label int
         y = int(y)
         return img, y
 
 
 def get_dataloaders(config: Dict[str, Any]):
+    """
+    Crée et retourne les DataLoaders d'entraînement/validation/test et des métadonnées.
+    À implémenter.
+    """
     ds_cfg = config.get("dataset", {}) or {}
     train_cfg = config.get("train", {}) or {}
     model_cfg = config.get("model", {}) or {}
@@ -70,31 +72,25 @@ def get_dataloaders(config: Dict[str, Any]):
     if not ds_name:
         raise ValueError("configs/config.yaml: dataset.name est requis (ex: zh-plus/tiny-imagenet).")
 
-    # Splits HF (chez toi: train + valid ; test = null => on le crée)
     split_cfg = ds_cfg.get("split", {}) or {}
     train_split_name = split_cfg.get("train", "train")
     val_split_name = split_cfg.get("val", "valid")
-    test_split_name = split_cfg.get("test", None)  # null => créer split
+    test_split_name = split_cfg.get("test", None)  # null on va créer split
 
     seed = int(train_cfg.get("seed", 42))
     batch_size = int(train_cfg.get("batch_size", 64))
     num_workers = int(ds_cfg.get("num_workers", 0))
     shuffle = bool(ds_cfg.get("shuffle", True))
 
-    # Colonnes (TinyImageNet HF: image/label) — configurable si besoin
     image_key = ds_cfg.get("image_key", "image")
     label_key = ds_cfg.get("label_key", "label")
 
-    # Cache HF (ton YAML: dataset.root = "./data")
     cache_dir = ds_cfg.get("root", None)
 
-    # 1) Charger splits HF
     hf_train_full = load_dataset(ds_name, split=train_split_name, cache_dir=cache_dir)
     hf_val = load_dataset(ds_name, split=val_split_name, cache_dir=cache_dir)
 
-    # 2) Créer test si absent
     if test_split_name is None:
-        # lisible depuis YAML si tu veux : dataset.test_size, sinon défaut 0.1
         test_size = float(ds_cfg.get("test_size", 0.1))
 
         split = hf_train_full.train_test_split(
@@ -108,11 +104,9 @@ def get_dataloaders(config: Dict[str, Any]):
         hf_train = hf_train_full
         hf_test = load_dataset(ds_name, split=test_split_name, cache_dir=cache_dir)
 
-    # 3) Transforms
-    preprocess_tf = get_preprocess_transforms(config)     # callable
-    augment_tf = get_augmentation_transforms(config)      # callable ou None (train-only)
+    preprocess_tf = get_preprocess_transforms(config)     
+    augment_tf = get_augmentation_transforms(config)      
 
-    # 4) Wrappers Torch
     train_ds = HFDatasetTorch(
         hf_train, image_key=image_key, label_key=label_key,
         preprocess=preprocess_tf, augment=augment_tf, is_train=True
@@ -126,7 +120,6 @@ def get_dataloaders(config: Dict[str, Any]):
         preprocess=preprocess_tf, augment=None, is_train=False
     )
 
-    # 5) DataLoaders
     pin_memory = bool(torch.cuda.is_available())
     train_loader = DataLoader(
         train_ds,
@@ -150,7 +143,6 @@ def get_dataloaders(config: Dict[str, Any]):
         pin_memory=pin_memory,
     )
 
-    # 6) meta (min requis + infos utiles)
     num_classes = int(model_cfg.get("num_classes", 200))
     input_shape = tuple(model_cfg.get("input_shape", (3, 64, 64)))
 

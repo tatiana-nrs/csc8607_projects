@@ -10,7 +10,6 @@ Exigences :
 - lire la section 'hparams' de la config
 - lancer plusieurs runs en variant les hyperparamètres
 - journaliser hparams et résultats de chaque run (TensorBoard HParams)
-- runs nommés de façon univoque
 """
 
 import argparse
@@ -43,8 +42,7 @@ def _grid_from_hparams(h: Dict[str, Any]) -> List[Dict[str, Any]]:
     lr_list = [float(v) for v in _as_list(h.get("lr", []))]
     wd_list = [float(v) for v in _as_list(h.get("weight_decay", []))]
 
-    # 2 hparams modèle (tu peux en garder exactement 2 comme demandé)
-    B_list = _as_list(h.get("B", []))          # ex: [[2,2,2], [3,3,3]]
+    B_list = _as_list(h.get("B", []))    
     width_list = [float(v) for v in _as_list(h.get("width", []))]
 
     if not lr_list:
@@ -71,10 +69,8 @@ def _run_one(
     """
     Lance un run court et retourne (best_val_acc, best_val_loss)
     """
-    # Clone config
     cfg = yaml.safe_load(yaml.safe_dump(base_cfg))
 
-    # Apply overrides
     cfg.setdefault("train", {}).setdefault("optimizer", {})
     cfg["train"]["optimizer"]["lr"] = float(combo["lr"])
     cfg["train"]["optimizer"]["weight_decay"] = float(combo["weight_decay"])
@@ -86,7 +82,7 @@ def _run_one(
     seed = int(cfg.get("train", {}).get("seed", 42))
     set_seed(seed)
 
-    # Data + model
+    #data + model
     train_loader, val_loader, _, meta = get_dataloaders(cfg)
     model = build_model(cfg).to(device)
 
@@ -97,7 +93,7 @@ def _run_one(
     max_steps = cfg.get("train", {}).get("max_steps", None)
     max_steps = int(max_steps) if max_steps is not None else None
 
-    # Run name (univoque)
+    # Run name 
     run_name = (
         f"proj_lr={combo['lr']:.0e}_wd={combo['weight_decay']:.0e}"
         f"_B={','.join(map(str, combo['B']))}_width={combo['width']}"
@@ -106,7 +102,6 @@ def _run_one(
     log_dir = runs_dir / run_name
     writer = SummaryWriter(log_dir=str(log_dir))
 
-    # Log hparams (affichés dans HParams)
     hparams_tb = {
         "lr": float(combo["lr"]),
         "weight_decay": float(combo["weight_decay"]),
@@ -170,12 +165,10 @@ def _run_one(
         if max_steps is not None and global_step >= max_steps:
             break
 
-    # HParams summary (1 seule fois à la fin)
     metrics_tb = {
         "best_val_acc": best_val_acc,
         "best_val_loss": best_val_loss,
     }
-    # writer.add_hparams(hparams_tb, metrics_tb)
 
     writer.close()
     print(f"[RUN DONE] {run_name} -> best_val_acc={best_val_acc:.4f} best_val_loss={best_val_loss:.4f}")

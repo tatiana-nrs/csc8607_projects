@@ -1,11 +1,16 @@
-# src/preprocessing.py
 from typing import Dict, Any
 import torchvision.transforms as T
 from PIL import Image
 
+"""
+Pré-traitements.
+
+Signature imposée :
+get_preprocess_transforms(config: dict) -> objet/transform callable
+"""
 
 class ToRGB:
-    """Force l'image en RGB (certaines images peuvent être en L)."""
+    """Force l'image en RGB"""
     def __call__(self, img):
         if not isinstance(img, Image.Image):
             img = Image.fromarray(img)
@@ -16,9 +21,7 @@ class ToRGB:
 
 def get_preprocess_transforms(config: Dict[str, Any]):
     """
-    Signature imposée:
-      get_preprocess_transforms(config: dict) -> transform callable
-
+    Retourne les transformations de pré-traitement. À implémenter
     Transformations invariantes (train/val/test):
       ToRGB -> Resize(optional) -> ToTensor -> Normalize(mean/std depuis YAML)
     """

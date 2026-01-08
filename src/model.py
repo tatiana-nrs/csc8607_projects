@@ -1,5 +1,11 @@
-# src/model.py
 from __future__ import annotations
+
+"""
+Construction du modèle (à implémenter par l'étudiant·e).
+
+Signature imposée :
+build_model(config: dict) -> torch.nn.Module
+"""
 
 from typing import Any, Dict, List, Tuple, Optional
 
@@ -28,7 +34,7 @@ class DepthwiseSeparableBlock(nn.Module):
 
         self.pointwise = nn.Conv2d(
             in_channels=in_ch,
-            out_channels=out_ch,     # mélange + ajuste #canaux
+            out_channels=out_ch,     # mélange + ajuste canaux
             kernel_size=1,
             bias=False,
         )
@@ -52,11 +58,7 @@ class DepthwiseSeparableBlock(nn.Module):
 
 def _read_B_and_width(config: Dict[str, Any]) -> Tuple[List[int], float]:
     """
-    Lit B=(B1,B2,B3) et width depuis la config, sans hardcoder.
-    Priorité:
-      1) config["model"]["B"] / config["model"]["width"]
-      2) config["hparams"]["B"] / config["hparams"]["width"] SI ce sont déjà des scalaires (pas une grille)
-      3) fallback (1,1,1) et 1.0
+    Lit B=(B1,B2,B3) et width depuis la config
     """
     model_cfg = config.get("model", {}) or {}
     h_cfg = config.get("hparams", {}) or {}
@@ -64,7 +66,6 @@ def _read_B_and_width(config: Dict[str, Any]) -> Tuple[List[int], float]:
     B = model_cfg.get("B", None)
     width = model_cfg.get("width", None)
 
-    # fallback possible si grid_search écrase hparams avec une valeur scalaire
     if B is None:
         B_candidate = h_cfg.get("B", None)
         if isinstance(B_candidate, list) and len(B_candidate) == 3 and all(isinstance(x, int) for x in B_candidate):
@@ -105,11 +106,11 @@ class DSConvNet(nn.Module):
         c2 = int(round(128 * width))
         c3 = int(round(256 * width))
 
-        # Stage 1 : entrée RGB => 3 canaux
+        #Stage 1  entrée RGB => 3 canaux
         stage1 = []
         in_ch = 3
         for i in range(B1):
-            out_ch = c1  # chaque bloc du stage produit c1
+            out_ch = c1 
             stage1.append(DepthwiseSeparableBlock(in_ch, out_ch, dropout=dropout))
             in_ch = out_ch
         self.stage1 = nn.Sequential(*stage1)
@@ -143,17 +144,14 @@ class DSConvNet(nn.Module):
         x = self.pool2(x)
 
         x = self.stage3(x)
-        x = self.gap(x)              # (B, C, 1, 1)
-        x = torch.flatten(x, 1)      # (B, C)
+        x = self.gap(x)              
+        x = torch.flatten(x, 1)      
         logits = self.classifier(x)  # (B, num_classes)
         return logits
 
 
 def build_model(config: Dict[str, Any]) -> nn.Module:
-    """
-    Fonction imposée par le dépôt.
-    Doit retourner un modèle PyTorch qui sort des logits (B, num_classes).
-    """
+    """Construit et retourne un nn.Module selon la config. À implémenter."""
     model_cfg = config.get("model", {}) or {}
     num_classes = int(model_cfg.get("num_classes", 200))
     dropout = float(model_cfg.get("dropout", 0.0))

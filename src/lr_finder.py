@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 """
-LR finder (LR range test).
+Recherche de taux d'apprentissage (LR finder) — à implémenter.
 
-Exécution :
+Doit exposer un main() exécutable via :
     python -m src.lr_finder --config configs/config.yaml
 
-Principe :
-- sous-ensemble fixe
-- LR augmente de min_lr -> max_lr (log-scale) sur num_iters itérations
-- log à CHAQUE itération : lr_finder/lr et lr_finder/loss (TensorBoard)
-- répète pour plusieurs weight_decay (runs séparés)
-- imprime une proposition de LR + une "fenêtre stable"
+Exigences minimales :
+- produire un log/trace permettant de visualiser (lr, loss) dans TensorBoard ou équivalent.
 """
 
 import argparse
@@ -49,7 +45,7 @@ def make_fixed_subset_loader(
 
     batch_size = int(getattr(train_loader, "batch_size", 32) or 32)
 
-    # Shuffle=True mais reproductible grâce au generator => plus réaliste qu'un ordre figé
+    #shuffle=True mais reproductible
     return DataLoader(
         subset,
         batch_size=batch_size,
@@ -62,7 +58,6 @@ def make_fixed_subset_loader(
 
 
 def lr_at(step: int, num_iters: int, min_lr: float, max_lr: float) -> float:
-    # interpolation log-scale
     t = step / max(1, (num_iters - 1))
     return min_lr * (max_lr / min_lr) ** t
 
@@ -80,7 +75,6 @@ def compute_window(lrs: List[float], losses: List[float], frac: float = 1.05) ->
     min_loss = losses[min_idx]
     thr = min_loss * frac
 
-    # fenêtre: parmi les points <= thr, mais seulement jusqu'au min (évite la remontée)
     ok = [i for i in range(0, min_idx + 1) if losses[i] <= thr]
     if not ok:
         return (lrs[min_idx], lrs[min_idx])
@@ -99,7 +93,7 @@ def lr_range_test(
     max_lr: float,
     runs_dir: Path,
 ) -> None:
-    # run séparé par WD
+
     run_name = f"lr_finder_wd{weight_decay:g}_" + time.strftime("%Y%m%d_%H%M%S")
     log_dir = runs_dir / run_name
     writer = SummaryWriter(log_dir=str(log_dir))
@@ -151,7 +145,6 @@ def lr_range_test(
 
         l = float(loss.item())
 
-        # EMA + correction de biais (standard LR finder)
         if ema is None:
             ema = l
         else:
@@ -169,7 +162,7 @@ def lr_range_test(
 
         best = min(best, ema_corr)
 
-        # arrêt si divergence (si tu ne vois jamais l'explosion -> augmenter max_lr)
+        #arrêt si divergence 
         if step > 10 and ema_corr > 4.0 * best:
             print(f"[STOP] divergence detected at step={step} lr={lr:.3e} loss={ema_corr:.3f}")
             break
@@ -179,7 +172,6 @@ def lr_range_test(
     # proposition LR
     min_idx = min(range(len(smooth_losses)), key=lambda i: smooth_losses[i])
     best_lr = lrs[min_idx]
-    # heuristique classique: prendre ~ /3 ou /10 du LR au minimum
     suggested_lr = best_lr / 3.0
 
     wmin, wmax = compute_window(lrs, smooth_losses, frac=1.05)
@@ -208,13 +200,12 @@ def main():
     subset_size = int(train_cfg.get("lr_finder_subset", 256))
     num_iters = int(train_cfg.get("lr_finder_iters", 100))
 
-    # important: si tu ne vois jamais la loss remonter/exploser, augmente finder_end_lr
     min_lr = float(train_cfg.get("finder_start_lr", 1e-6))
-    max_lr = float(train_cfg.get("finder_end_lr", 1.0))  # <- 1.0 donne souvent une zone de divergence
+    max_lr = float(train_cfg.get("finder_end_lr", 1.0)) 
 
     wd_list = train_cfg.get("lr_finder_weight_decays", None)
     if wd_list is None:
-        wd_list = [1e-5, 1e-4]  # attendu par le prof
+        wd_list = [1e-5, 1e-4]  
     wd_list = [float(x) for x in wd_list]
 
     runs_dir = Path(cfg["paths"]["runs_dir"])

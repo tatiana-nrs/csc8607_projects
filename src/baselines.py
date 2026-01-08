@@ -1,4 +1,3 @@
-# src/baselines.py
 import argparse
 import random
 from collections import Counter
@@ -19,13 +18,11 @@ def _set_seed(seed: int):
 
 
 def _extract_labels(dataset):
-    # HF dataset wrapper fréquent
-    if hasattr(dataset, "base_ds"):  # ex: dataset.base_ds["label"]
+    if hasattr(dataset, "base_ds"): 
         return [int(x) for x in dataset.base_ds["label"]]
     if hasattr(dataset, "ds"):
         return [int(x) for x in dataset.ds["label"]]
-
-    # fallback : itération (plus lent)
+    
     labels = []
     for i in range(len(dataset)):
         _, y = dataset[i]

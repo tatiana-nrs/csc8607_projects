@@ -31,25 +31,23 @@ def main():
     parser.add_argument("--checkpoint", type=str, required=True)
     args = parser.parse_args()
 
-    # Load config
+    #load conf
     cfg: Dict[str, Any] = yaml.safe_load(open(args.config, "r"))
 
     device = get_device(cfg.get("train", {}))
     print(f"[INFO] device = {device}")
 
-    # Data (test only)
     _, _, test_loader, meta = get_dataloaders(cfg)
     num_classes = int(meta.get("num_classes", cfg["model"]["num_classes"]))
 
-    # Model
     model = build_model(cfg).to(device)
 
-    # Load checkpoint
+    #load checkpoint
     ckpt = torch.load(args.checkpoint, map_location=device)
     model.load_state_dict(ckpt["model"])
     model.eval()
 
-    # Evaluation
+    #eval
     test_loss, test_acc, test_f1 = eval_epoch(
         model,
         test_loader,
@@ -57,7 +55,7 @@ def main():
         num_classes=num_classes
     )
 
-    print("\n===== TEST RESULTS =====")
+    print("TEST RESULTS")
     print(f"Test loss     : {test_loss:.4f}")
     print(f"Test accuracy : {test_acc:.4f}")
     print(f"Test F1 macro : {test_f1:.4f}")
